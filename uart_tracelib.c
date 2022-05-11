@@ -31,7 +31,11 @@
 #include "Driver_USART.h"
 #include "Driver_PINMUX_AND_PINPAD.h"
 
-/* UART Driver instance (UART0-UART7) */
+/* Select used UART.
+ *  Supported UARTs:
+ *      UART2 (Pin P3_17)
+ *      UART4 (Pin P3_2)
+ */
 #define UART      4
 
 /* For Release build disable printf and semihosting */
@@ -65,6 +69,25 @@ static int hardware_init(void)
 {
     int32_t ret;
 
+#if UART == 2
+    /* PINMUX UART2_B */
+
+    /* Configure GPIO Pin : P3_16 as UART2_RX_B */
+    ret = PINMUX_Config (PORT_NUMBER_3, PIN_NUMBER_16, PINMUX_ALTERNATE_FUNCTION_2);
+    if(ret != ARM_DRIVER_OK)
+    {
+        printf("\r\n Error in PINMUX.\r\n");
+        return -1;
+    }
+
+    /* Configure GPIO Pin : P3_17 as UART2_TX_B */
+    ret = PINMUX_Config (PORT_NUMBER_3, PIN_NUMBER_17, PINMUX_ALTERNATE_FUNCTION_2);
+    if(ret != ARM_DRIVER_OK)
+    {
+        printf("\r\n Error in PINMUX.\r\n");
+        return -1;
+    }
+#elif UART == 4
     /* PINMUX UART4_B */
 
     /* Configure GPIO Pin : P3_1 as UART4_RX_B */
@@ -82,6 +105,9 @@ static int hardware_init(void)
         printf("\r\n Error in PINMUX.\r\n");
         return -1;
     }
+#else
+    #error Unsupported UART!
+#endif
 
     return 0;
 }
