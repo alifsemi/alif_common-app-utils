@@ -38,25 +38,6 @@
  */
 #define UART      4
 
-/* For Release build disable printf and semihosting */
-//#define DISABLE_PRINTF
-
-#ifdef DISABLE_PRINTF
-#define printf(fmt, ...) (0)
-/* Also Disable Semihosting */
-#if __ARMCC_VERSION >= 6000000
-__asm(".global __use_no_semihosting");
-#elif __ARMCC_VERSION >= 5000000
-#pragma import(__use_no_semihosting)
-#else
-#error Unsupported compiler
-#endif
-
-void _sys_exit(int return_code) {
-    while (1);
-}
-#endif
-
 /* UART Driver */
 extern ARM_DRIVER_USART ARM_Driver_USART_(UART);
 
@@ -76,7 +57,6 @@ static int hardware_init(void)
     ret = PINMUX_Config (PORT_NUMBER_3, PIN_NUMBER_16, PINMUX_ALTERNATE_FUNCTION_2);
     if(ret != ARM_DRIVER_OK)
     {
-        printf("\r\n Error in PINMUX.\r\n");
         return -1;
     }
 
@@ -84,7 +64,6 @@ static int hardware_init(void)
     ret = PINMUX_Config (PORT_NUMBER_3, PIN_NUMBER_17, PINMUX_ALTERNATE_FUNCTION_2);
     if(ret != ARM_DRIVER_OK)
     {
-        printf("\r\n Error in PINMUX.\r\n");
         return -1;
     }
 #elif UART == 4
@@ -94,7 +73,6 @@ static int hardware_init(void)
     ret = PINMUX_Config (PORT_NUMBER_3, PIN_NUMBER_1, PINMUX_ALTERNATE_FUNCTION_1);
     if(ret != ARM_DRIVER_OK)
     {
-        printf("\r\n Error in PINMUX.\r\n");
         return -1;
     }
 
@@ -102,7 +80,6 @@ static int hardware_init(void)
     ret = PINMUX_Config (PORT_NUMBER_3, PIN_NUMBER_2, PINMUX_ALTERNATE_FUNCTION_1);
     if(ret != ARM_DRIVER_OK)
     {
-        printf("\r\n Error in PINMUX.\r\n");
         return -1;
     }
 #else
@@ -122,18 +99,11 @@ int tracelib_init()
     char  cmd    = 0;
     int32_t ret    = 0;
     uint32_t events = 0;
-    ARM_DRIVER_VERSION version;
-
-    printf("UART tracelib starting up...\n");
-
-    version = USARTdrv->GetVersion();
-    printf("\r\n UART version api:%X driver:%X...\r\n",version.api, version.drv);
 
     /* Initialize UART hardware pins using PinMux Driver. */
     ret = hardware_init();
     if(ret != 0)
     {
-        printf("\r\n Error in UART hardware_init.\r\n");
         return ret;
     }
 
@@ -141,7 +111,6 @@ int tracelib_init()
     ret = USARTdrv->Initialize(myUART_callback);
     if(ret != ARM_DRIVER_OK)
     {
-        printf("\r\n Error in UART Initialize.\r\n");
         return ret;
     }
 
@@ -149,7 +118,6 @@ int tracelib_init()
     ret = USARTdrv->PowerControl(ARM_POWER_FULL);
     if(ret != ARM_DRIVER_OK)
     {
-        printf("\r\n Error in UART Power Up.\r\n");
         return ret;
     }
 
@@ -161,7 +129,6 @@ int tracelib_init()
                              ARM_USART_FLOW_CONTROL_NONE, 115200);
     if(ret != ARM_DRIVER_OK)
     {
-        printf("\r\n Error in UART Control.\r\n");
         return ret;
     }
 
@@ -169,7 +136,6 @@ int tracelib_init()
     ret =  USARTdrv->Control(ARM_USART_CONTROL_TX, 1);
     if(ret != ARM_DRIVER_OK)
     {
-        printf("\r\n Error in UART Control TX.\r\n");
         return ret;
     }
 
@@ -177,7 +143,6 @@ int tracelib_init()
     ret =  USARTdrv->Control(ARM_USART_CONTROL_RX, 0); // RX disabled
     if(ret != ARM_DRIVER_OK)
     {
-        printf("\r\n Error in UART Control RX.\r\n");
         return ret;
     }
     */
@@ -192,7 +157,6 @@ int send_str(const char* str, uint32_t len)
     int32_t ret = USARTdrv->Send(str, len);
     if(ret != ARM_DRIVER_OK)
     {
-        printf("\r\n Error in UART Send.\r\n");
         return ret;
     }
 
@@ -202,35 +166,12 @@ int send_str(const char* str, uint32_t len)
 
 void tracef(const char * format, ...)
 {
-  char buffer[256];
+  static char buffer[256];
   va_list args;
   va_start(args, format);
   vsnprintf(buffer, sizeof(buffer), format, args);
   send_str(buffer, strlen(buffer));
   va_end(args);
 }
-
-#if 0 // power off
-error_poweroff:
-
-/* Received error Power off UART peripheral */
-ret = USARTdrv->PowerControl(ARM_POWER_OFF);
-if(ret != ARM_DRIVER_OK)
-{
-    printf("\r\n Error in UART Power OFF.\r\n");
-}
-
-error_uninitialize:
-
-/* Received error Un-initialize UART driver */
-ret = USARTdrv->Uninitialize();
-if(ret != ARM_DRIVER_OK)
-{
-    printf("\r\n Error in UART Uninitialize.\r\n");
-}
-
-printf("\r\n XXX UART demo thread exiting XXX...\r\n");
-}
-#endif
 
 /************************ (C) COPYRIGHT ALIF SEMICONDUCTOR *****END OF FILE****/
