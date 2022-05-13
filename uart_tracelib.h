@@ -30,8 +30,35 @@
 
 #include <stdint.h>
 
-int tracelib_init();
+/* For Release build disable printf and semihosting */
+#define DISABLE_PRINTF
+
+#ifdef DISABLE_PRINTF
+#define printf tracef
+#undef assert
+#define assert 0
+#endif
+
+/**
+ * @brief Initializes the trace lib.
+ *
+ * @param prefix string prepended to every trace message
+ *
+ * @note Max length is currently 256 - length of the prefix
+ */
+int tracelib_init(const char * prefix);
+
+/**
+ * @brief write trace to UART
+ */
 void tracef(const char * format, ...);
+
+/**
+ * @brief Send string to UART, no prefix is prepended.
+ *
+ * @param str string to send over UART
+ * @param len length of the string
+ */
 int send_str(const char* str, uint32_t len);
 
 #endif /* UART_TRACELIB_H_ */

@@ -52,6 +52,9 @@ static ARM_DRIVER_USART *USARTdrv = &ARM_Driver_USART_(UART);
 
 volatile uint32_t uart_event;
 static bool initialized = false;
+const char * tr_prefix = NULL;
+uint16_t prefix_len;
+#define MAX_TRACE_LEN 256
 
 static int hardware_init(void)
 {
@@ -101,11 +104,19 @@ void myUART_callback(uint32_t event)
     uart_event = event;
 }
 
-int tracelib_init()
+int tracelib_init(const char * prefix)
 {
     char  cmd    = 0;
     int32_t ret    = 0;
     uint32_t events = 0;
+
+    tr_prefix = prefix;
+    if (tr_prefix) {
+        prefix_len = strlen(tr_prefix);
+    } else {
+        prefix_len = 0;
+    }
+
 
     /* Initialize UART hardware pins using PinMux Driver. */
     ret = hardware_init();
@@ -146,14 +157,6 @@ int tracelib_init()
         return ret;
     }
 
-    /* Don't enable RX enabled as this library does not support it
-    ret =  USARTdrv->Control(ARM_USART_CONTROL_RX, 1);
-    if(ret != ARM_DRIVER_OK)
-    {
-        return ret;
-    }
-    */
-
     initialized = true;
     return ret;
 }
@@ -165,7 +168,6 @@ int send_str(const char* str, uint32_t len)
     if (initialized)
     {
         uart_event = 0;
-
         int32_t ret = USARTdrv->Send(str, len);
         if(ret != ARM_DRIVER_OK)
         {
@@ -181,10 +183,14 @@ void tracef(const char * format, ...)
 {
     if (initialized)
     {
-        static char buffer[256];
+        static char buffer[MAX_TRACE_LEN];
+
         va_list args;
         va_start(args, format);
-        vsnprintf(buffer, sizeof(buffer), format, args);
+        if (prefix_len) {
+            memcpy(buffer, tr_prefix, prefix_len);
+        }
+        vsnprintf(buffer + prefix_len, sizeof(buffer) - prefix_len, format, args);
         send_str(buffer, strlen(buffer));
         va_end(args);
     }
