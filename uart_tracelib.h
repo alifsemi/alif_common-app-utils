@@ -28,7 +28,10 @@
 #ifndef UART_TRACELIB_H_
 #define UART_TRACELIB_H_
 
+#include <stdint.h>
+
 int tracelib_init();
 void tracef(const char * format, ...);
+int send_str(const char* str, uint32_t len);
 
 #endif /* UART_TRACELIB_H_ */

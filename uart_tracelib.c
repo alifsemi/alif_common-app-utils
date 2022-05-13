@@ -25,11 +25,17 @@
    POSSIBILITY OF SUCH DAMAGE.
    ---------------------------------------------------------------------------*/
 
+// Uncomment this to disable traces to UART
+//#define DISABLE_UART_TRACE
+
+#include "Driver_USART.h"
+
+#if !defined(DISABLE_UART_TRACE)
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
-#include "Driver_USART.h"
 #include "Driver_PINMUX_AND_PINPAD.h"
+
 
 /* Select used UART.
  *  Supported UARTs:
@@ -45,6 +51,7 @@ extern ARM_DRIVER_USART ARM_Driver_USART_(UART);
 static ARM_DRIVER_USART *USARTdrv = &ARM_Driver_USART_(UART);
 
 volatile uint32_t uart_event;
+static bool initialized = false;
 
 static int hardware_init(void)
 {
@@ -139,39 +146,66 @@ int tracelib_init()
         return ret;
     }
 
-    /* No RX
-    ret =  USARTdrv->Control(ARM_USART_CONTROL_RX, 0); // RX disabled
+    /* Don't enable RX enabled as this library does not support it
+    ret =  USARTdrv->Control(ARM_USART_CONTROL_RX, 1);
     if(ret != ARM_DRIVER_OK)
     {
         return ret;
     }
     */
 
+    initialized = true;
     return ret;
 }
 
 int send_str(const char* str, uint32_t len)
 {
-    uart_event = 0;
+    int ret = 0;
 
-    int32_t ret = USARTdrv->Send(str, len);
-    if(ret != ARM_DRIVER_OK)
+    if (initialized)
     {
-        return ret;
-    }
+        uart_event = 0;
 
-    while (!uart_event);
+        int32_t ret = USARTdrv->Send(str, len);
+        if(ret != ARM_DRIVER_OK)
+        {
+            return ret;
+        }
+
+        while (!uart_event);
+    }
     return ret;
 }
 
 void tracef(const char * format, ...)
 {
-  static char buffer[256];
-  va_list args;
-  va_start(args, format);
-  vsnprintf(buffer, sizeof(buffer), format, args);
-  send_str(buffer, strlen(buffer));
-  va_end(args);
+    if (initialized)
+    {
+        static char buffer[256];
+        va_list args;
+        va_start(args, format);
+        vsnprintf(buffer, sizeof(buffer), format, args);
+        send_str(buffer, strlen(buffer));
+        va_end(args);
+    }
 }
+
+#else
+
+int tracelib_init()
+{
+    return 0;
+}
+
+int send_str(const char* str, uint32_t len)
+{
+    return 0;
+}
+
+void tracef(const char * format, ...)
+{
+}
+
+#endif // DISABLE_UART_TRACE
 
 /************************ (C) COPYRIGHT ALIF SEMICONDUCTOR *****END OF FILE****/
