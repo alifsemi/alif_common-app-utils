@@ -198,7 +198,7 @@ void tracef(const char * format, ...)
 
 #else
 
-int tracelib_init()
+int tracelib_init(const char * prefix)
 {
     return 0;
 }
