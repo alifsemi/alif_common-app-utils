@@ -200,16 +200,20 @@ void tracef(const char * format, ...)
 
 int tracelib_init(const char * prefix)
 {
+    (void)prefix;
     return 0;
 }
 
 int send_str(const char* str, uint32_t len)
 {
+    (void)str;
+    (void)len;
     return 0;
 }
 
 void tracef(const char * format, ...)
 {
+    (void)format;
 }
 
 #endif // DISABLE_UART_TRACE
