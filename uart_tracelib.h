@@ -34,15 +34,6 @@
 extern "C" {
 #endif
 
-/* For Release build disable printf and semihosting */
-#define DISABLE_PRINTF
-
-#ifdef DISABLE_PRINTF
-#define printf tracef
-#undef assert
-#define assert 0
-#endif
-
 /**
  * @brief Initializes the trace lib.
  *
