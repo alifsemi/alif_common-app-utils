@@ -30,6 +30,10 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* For Release build disable printf and semihosting */
 #define DISABLE_PRINTF
 
@@ -60,5 +64,9 @@ void tracef(const char * format, ...);
  * @param len length of the string
  */
 int send_str(const char* str, uint32_t len);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* UART_TRACELIB_H_ */
