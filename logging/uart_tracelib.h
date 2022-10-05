@@ -49,6 +49,14 @@ int tracelib_init(const char * prefix);
 void tracef(const char * format, ...);
 
 /**
+ * @brief Receive string from UART.
+ *
+ * @param str string buffer for received data
+ * @param len maximum length of the string
+ */
+int receive_str(char* str, uint32_t len);
+
+/**
  * @brief Send string to UART, no prefix is prepended.
  *
  * @param str string to send over UART
