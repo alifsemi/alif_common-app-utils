@@ -99,11 +99,6 @@ static int hardware_init(void)
     return 0;
 }
 
-void myUART_callback(uint32_t event)
-{
-    uart_event = event;
-}
-
 int tracelib_init(const char * prefix)
 {
     char  cmd    = 0;
@@ -117,7 +112,6 @@ int tracelib_init(const char * prefix)
         prefix_len = 0;
     }
 
-
     /* Initialize UART hardware pins using PinMux Driver. */
     ret = hardware_init();
     if(ret != 0)
@@ -126,7 +120,7 @@ int tracelib_init(const char * prefix)
     }
 
     /* Initialize UART driver */
-    ret = USARTdrv->Initialize(myUART_callback);
+    ret = USARTdrv->Initialize(NULL);
     if(ret != ARM_DRIVER_OK)
     {
         return ret;
@@ -157,7 +151,30 @@ int tracelib_init(const char * prefix)
         return ret;
     }
 
+    /* Receiver line */
+    ret =  USARTdrv->Control(ARM_USART_CONTROL_RX, 1);
+    if(ret != ARM_DRIVER_OK)
+    {
+        return ret;
+    }
+
     initialized = true;
+    return ret;
+}
+
+int receive_str(char* str, uint32_t len)
+{
+    int ret = 0;
+    if (initialized)
+    {
+        ret = USARTdrv->Receive(str, len);
+        if(ret != ARM_DRIVER_OK)
+        {
+            return ret;
+        }
+
+        while (USARTdrv->GetRxCount() != len);
+    }
     return ret;
 }
 
@@ -168,13 +185,13 @@ int send_str(const char* str, uint32_t len)
     if (initialized)
     {
         uart_event = 0;
-        int32_t ret = USARTdrv->Send(str, len);
+        ret = USARTdrv->Send(str, len);
         if(ret != ARM_DRIVER_OK)
         {
             return ret;
         }
 
-        while (!uart_event);
+        while (USARTdrv->GetTxCount() != len);
     }
     return ret;
 }
@@ -201,6 +218,13 @@ void tracef(const char * format, ...)
 int tracelib_init(const char * prefix)
 {
     (void)prefix;
+    return 0;
+}
+
+int receive_str(char* str, uint32_t len)
+{
+    (void)str;
+    (void)len;
     return 0;
 }
 

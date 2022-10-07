@@ -288,8 +288,12 @@ int fgetc(FILE *f)
 {
     UNUSED(f);
 
-    //return UartPutc(UartGetc());
-    return -1;
+    char c;
+    if (receive_str(&c, 1))
+    {
+    	return EOF;
+    }
+    return c;
 }
 
 #ifndef ferror
