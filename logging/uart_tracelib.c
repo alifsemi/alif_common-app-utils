@@ -42,7 +42,13 @@
  *      UART2 (Pin P3_17)
  *      UART4 (Pin P3_2)
  */
-#define UART      4
+#if defined(M55_HP)
+    #define UART    4
+#elif defined(M55_HE)
+    #define UART    2
+#else
+    #error "Undefined M55 CPU!"
+#endif
 
 /* UART Driver */
 extern ARM_DRIVER_USART ARM_Driver_USART_(UART);
@@ -101,9 +107,7 @@ static int hardware_init(void)
 
 int tracelib_init(const char * prefix)
 {
-    char  cmd    = 0;
     int32_t ret    = 0;
-    uint32_t events = 0;
 
     tr_prefix = prefix;
     if (tr_prefix) {
