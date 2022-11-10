@@ -34,6 +34,8 @@
 
 #include "uart_tracelib.h"
 
+#define UNUSED(x) (void)(x)
+
 #if defined(__ARMCC_VERSION) && (__ARMCC_VERSION >= 6100100)
 /* Arm compiler re-targeting */
 
@@ -50,6 +52,8 @@
 
 #else
 /* GNU compiler re-targeting */
+
+#include <sys/stat.h>
 
 /*
  * This type is used by the _ I/O functions to denote an open
@@ -69,13 +73,39 @@ extern FILEHANDLE _open(const char * /*name*/, int /*openmode*/);
 
 #define RETARGET(fun) fun
 
+int RETARGET(_fstat)(int fd, struct stat *buffer)
+{
+    UNUSED(fd);
+    UNUSED(buffer);
+    return -1;
+}
+
+int RETARGET(_getpid)( void )
+{
+    return -1;
+}
+
+int RETARGET(_kill) (int pid, int sig)
+{
+    UNUSED(pid);
+    UNUSED(sig);
+    return -1;
+}
+
+long RETARGET(_lseek)(int fd, long offset, int origin)
+{
+    UNUSED(fd);
+    UNUSED(offset);
+    UNUSED(origin);
+    return -1;
+}
+
 #endif
 
 /* Standard IO device name defines. */
 const char __stdin_name[] __attribute__((aligned(4)))  = "STDIN";
 const char __stdout_name[] __attribute__((aligned(4))) = "STDOUT";
 const char __stderr_name[] __attribute__((aligned(4))) = "STDERR";
-#define UNUSED(x) (void)(x)
 
 #define RETARGET_BUF_MAX 128
 static char retarget_buf[RETARGET_BUF_MAX];
@@ -151,7 +181,11 @@ int RETARGET(_read)(FILEHANDLE fh, unsigned char *buf, unsigned int len, int mod
     }
 }
 
-int RETARGET(_istty)(FILEHANDLE fh)
+#ifdef __ARMCC_VERSION
+int _sys_istty(FILEHANDLE fh)
+#else
+int _isatty(FILEHANDLE fh)
+#endif
 {
     switch (fh) {
     case STDIN:
@@ -165,11 +199,14 @@ int RETARGET(_istty)(FILEHANDLE fh)
 
 int RETARGET(_close)(FILEHANDLE fh)
 {
-    if (RETARGET(_istty(fh))) {
+    switch (fh) {
+    case STDIN:
+    case STDOUT:
+    case STDERR:
         return 0;
+    default:
+        return -1;
     }
-
-    return -1;
 }
 
 int RETARGET(_seek)(FILEHANDLE fh, long pos)
@@ -189,11 +226,14 @@ int RETARGET(_ensure)(FILEHANDLE fh)
 
 long RETARGET(_flen)(FILEHANDLE fh)
 {
-    if (RETARGET(_istty)(fh)) {
+    switch (fh) {
+    case STDIN:
+    case STDOUT:
+    case STDERR:
         return 0;
+    default:
+        return -1;
     }
-
-    return -1;
 }
 
 int RETARGET(_tmpnam)(char *name, int sig, unsigned int maxlen)
@@ -215,10 +255,7 @@ char *RETARGET(_command_string)(char *cmd, int len)
 void RETARGET(_exit)(int return_code)
 {
     UNUSED(return_code);
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wnonnull"
-    fputc(0x0A, (FILE*)0);
-#pragma clang diagnostic pop
+    fputc(0x0A, stdout);
     while(1);
 }
 
