@@ -26,15 +26,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#if !defined(USE_SEMIHOSTING)
+
 #include <stdio.h>
+#include <stdbool.h>
 #include <string.h>
 #include <time.h>
 #include <RTE_Components.h>
 #include CMSIS_device_header
 
 #include "uart_tracelib.h"
-
-#define UNUSED(x) (void)(x)
 
 #if defined(__ARMCC_VERSION) && (__ARMCC_VERSION >= 6100100)
 /* Arm compiler re-targeting */
@@ -50,10 +52,15 @@
 
 #define RETARGET(fun) _sys##fun
 
+#if __ARMCLIB_VERSION >= 6190004
+#define TMPNAM_FUNCTION RETARGET(_tmpnam2)
+#else
+#define TMPNAM_FUNCTION RETARGET(_tmpnam)
+#endif
+#define ISTTY_FUNCTION RETARGET(_istty)
+
 #else
 /* GNU compiler re-targeting */
-
-#include <sys/stat.h>
 
 /*
  * This type is used by the _ I/O functions to denote an open
@@ -73,32 +80,8 @@ extern FILEHANDLE _open(const char * /*name*/, int /*openmode*/);
 
 #define RETARGET(fun) fun
 
-int RETARGET(_fstat)(int fd, struct stat *buffer)
-{
-    UNUSED(fd);
-    UNUSED(buffer);
-    return -1;
-}
-
-int RETARGET(_getpid)( void )
-{
-    return -1;
-}
-
-int RETARGET(_kill) (int pid, int sig)
-{
-    UNUSED(pid);
-    UNUSED(sig);
-    return -1;
-}
-
-long RETARGET(_lseek)(int fd, long offset, int origin)
-{
-    UNUSED(fd);
-    UNUSED(offset);
-    UNUSED(origin);
-    return -1;
-}
+#define TMPNAM_FUNCTION RETARGET(_tmpnam)
+#define ISTTY_FUNCTION RETARGET(_isatty)
 
 #endif
 
@@ -106,6 +89,7 @@ long RETARGET(_lseek)(int fd, long offset, int origin)
 const char __stdin_name[] __attribute__((aligned(4)))  = "STDIN";
 const char __stdout_name[] __attribute__((aligned(4))) = "STDOUT";
 const char __stderr_name[] __attribute__((aligned(4))) = "STDERR";
+#define UNUSED(x) (void)(x)
 
 #define RETARGET_BUF_MAX 128
 static char retarget_buf[RETARGET_BUF_MAX];
@@ -141,19 +125,38 @@ int RETARGET(_write)(FILEHANDLE fh, const unsigned char *buf, unsigned int len, 
     switch (fh) {
     case STDOUT:
     case STDERR: {
-        int c;
-
-        while (len-- > 0) {
-            c = fputc(*buf++, stdout);
-            if (c == EOF) {
-                return EOF;
-            }
+        if(__get_IPSR() != 0U)
+        {
+           // this is ISR context so don't push to UART
+           if(retarget_buf_len < RETARGET_BUF_MAX)
+           {
+               // if we're full just drop
+               if (len > RETARGET_BUF_MAX - retarget_buf_len) {
+                   len = RETARGET_BUF_MAX - retarget_buf_len;
+               }
+               memcpy(retarget_buf + retarget_buf_len, buf, len);
+               retarget_buf_len += len;
+           }
         }
-
+        else
+        {
+            if (retarget_buf_len != 0)
+            {
+                send_str(retarget_buf, retarget_buf_len);
+                retarget_buf_len = 0;
+            }
+            send_str((const char *) buf, len);
+        }
+#ifdef __ARMCC_VERSION
+        // armcc expects to get the amount of characters that were not written
         return 0;
+#else
+        // gcc expects to get the amount of characters written
+        return len;
+#endif
     }
     default:
-        return EOF;
+        return -1;
     }
 }
 
@@ -164,28 +167,38 @@ int RETARGET(_read)(FILEHANDLE fh, unsigned char *buf, unsigned int len, int mod
     switch (fh) {
     case STDIN: {
         int c;
+        unsigned int read = 0;
+        bool eof = false;
 
-        while (len-- > 0) {
+        while (read < len) {
             c = fgetc(stdin);
             if (c == EOF) {
-                return EOF;
+                eof = true;
+                break;
             }
 
             *buf++ = (unsigned char)c;
+            read++;
         }
 
-        return 0;
+#ifdef __ARMCC_VERSION
+        /* Return number of bytes not read, combined with an EOF flag */
+        return (eof ? (int) 0x80000000 : 0) | (len - read);
+#else
+        /* Return number of bytes read */
+        if (read > 0) {
+            return read;
+        } else {
+            return eof ? -1 : 0;
+        }
+#endif
     }
     default:
-        return EOF;
+        return -1;
     }
 }
 
-#ifdef __ARMCC_VERSION
-int _sys_istty(FILEHANDLE fh)
-#else
-int _isatty(FILEHANDLE fh)
-#endif
+int ISTTY_FUNCTION(FILEHANDLE fh)
 {
     switch (fh) {
     case STDIN:
@@ -199,20 +212,24 @@ int _isatty(FILEHANDLE fh)
 
 int RETARGET(_close)(FILEHANDLE fh)
 {
-    switch (fh) {
-    case STDIN:
-    case STDOUT:
-    case STDERR:
+    if (ISTTY_FUNCTION(fh)) {
         return 0;
-    default:
-        return -1;
     }
+
+    return -1;
 }
 
+#if defined(__ARMCC_VERSION)
 int RETARGET(_seek)(FILEHANDLE fh, long pos)
+#else
+long RETARGET(_lseek)(FILEHANDLE fh, long pos, int whence)
+#endif
 {
     UNUSED(fh);
     UNUSED(pos);
+#if !defined(__ARMCC_VERSION)
+    UNUSED(whence);
+#endif
 
     return -1;
 }
@@ -226,17 +243,14 @@ int RETARGET(_ensure)(FILEHANDLE fh)
 
 long RETARGET(_flen)(FILEHANDLE fh)
 {
-    switch (fh) {
-    case STDIN:
-    case STDOUT:
-    case STDERR:
+    if (ISTTY_FUNCTION(fh)) {
         return 0;
-    default:
-        return -1;
     }
+
+    return -1;
 }
 
-int RETARGET(_tmpnam)(char *name, int sig, unsigned int maxlen)
+int TMPNAM_FUNCTION(char* name, int sig, unsigned int maxlen)
 {
     UNUSED(name);
     UNUSED(sig);
@@ -255,8 +269,13 @@ char *RETARGET(_command_string)(char *cmd, int len)
 void RETARGET(_exit)(int return_code)
 {
     UNUSED(return_code);
-    fputc(0x0A, stdout);
-    while(1);
+
+    putchar('\n');
+
+    __BKPT();
+    while(1) {
+        __WFE();
+    }
 }
 
 int system(const char *cmd)
@@ -300,49 +319,12 @@ int rename(const char *oldn, const char *newn)
     return 0;
 }
 
-int fputc(int ch, FILE *f)
-{
-    UNUSED(f);
-    retarget_buf[retarget_buf_len++] = (uint8_t)ch;
-
-    // send when buffer is full and on line break
-    if(retarget_buf_len == RETARGET_BUF_MAX ||
-       ch == 0x0A)
-    {
-        if(__get_IPSR() != 0U)
-        {
-            // this is ISR context so don't push to UART
-            if(retarget_buf_len == RETARGET_BUF_MAX)
-            {
-                // if we're full just drop
-                retarget_buf_len--;
-            }
-            // otherwise just continue buffering over eol barrier
-        }
-        else
-        {
-            int buf_len = retarget_buf_len;
-            retarget_buf_len = 0;
-            if(send_str(retarget_buf, buf_len))
-            {
-                return EOF;
-            }
-        }
-    }
-
-    return ch;
-}
-
 int fgetc(FILE *f)
 {
     UNUSED(f);
 
-    char c;
-    if (receive_str(&c, 1))
-    {
-    	return EOF;
-    }
-    return c;
+    //return UartPutc(UartGetc());
+    return -1;
 }
 
 #ifndef ferror
@@ -356,3 +338,35 @@ int ferror(FILE *f)
 }
 
 #endif /* #ifndef ferror */
+
+/* More newlib functions */
+#ifndef __ARMCC_VERSION
+
+struct stat;
+int _fstat(int f, struct stat *buf)
+{
+    UNUSED(f);
+    UNUSED(buf);
+
+    return -1;
+}
+
+int _getpid()
+{
+    return 1;
+}
+
+int _kill(int pid, int sig)
+{
+    UNUSED(sig);
+
+    if (pid == 1) {
+        RETARGET(_exit(1));
+    }
+
+    return -1;
+}
+
+#endif // !defined __ARMCC_VERSION
+
+#endif // USE_SEMIHOSTING
