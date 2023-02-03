@@ -118,6 +118,16 @@ FILEHANDLE RETARGET(_open)(const char *name, int openmode)
     return -1;
 }
 
+void flush_uart()
+{
+    if (retarget_buf_len != 0)
+    {
+        send_str(retarget_buf, retarget_buf_len);
+        retarget_buf_len = 0;
+    }
+}
+
+
 int RETARGET(_write)(FILEHANDLE fh, const unsigned char *buf, unsigned int len, int mode)
 {
     UNUSED(mode);
@@ -140,11 +150,7 @@ int RETARGET(_write)(FILEHANDLE fh, const unsigned char *buf, unsigned int len, 
         }
         else
         {
-            if (retarget_buf_len != 0)
-            {
-                send_str(retarget_buf, retarget_buf_len);
-                retarget_buf_len = 0;
-            }
+            flush_uart();
             send_str((const char *) buf, len);
         }
 #ifdef __ARMCC_VERSION
