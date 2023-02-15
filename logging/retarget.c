@@ -127,6 +127,15 @@ void flush_uart()
     }
 }
 
+__STATIC_FORCEINLINE uint32_t in_interrupt(void)
+{
+#ifdef A32
+    return (__get_mode() == CPSR_M_IRQ || __get_mode() == CPSR_M_FIQ);
+#else
+    return __get_IPSR() != 0U;
+#endif
+}
+
 
 int RETARGET(_write)(FILEHANDLE fh, const unsigned char *buf, unsigned int len, int mode)
 {
@@ -135,7 +144,7 @@ int RETARGET(_write)(FILEHANDLE fh, const unsigned char *buf, unsigned int len, 
     switch (fh) {
     case STDOUT:
     case STDERR: {
-        if(__get_IPSR() != 0U)
+        if(in_interrupt())
         {
            // this is ISR context so don't push to UART
            if(retarget_buf_len < RETARGET_BUF_MAX)

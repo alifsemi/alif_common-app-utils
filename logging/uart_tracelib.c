@@ -29,6 +29,8 @@
     #define UART    4
 #elif defined(M55_HE)
     #define UART    2
+#elif defined(A32)
+    #define UART    6
 #else
     #error "Undefined M55 CPU!"
 #endif
@@ -78,6 +80,20 @@ static int hardware_init(void)
 
     /* Configure GPIO Pin : P3_2 as UART4_TX_B */
     ret = PINMUX_Config (PORT_NUMBER_3, PIN_NUMBER_2, PINMUX_ALTERNATE_FUNCTION_1);
+    if(ret != ARM_DRIVER_OK)
+    {
+        return -1;
+    }
+#elif UART == 6
+    /* Configure GPIO Pin : P3_14 as UART6_RX_B */
+    ret = PINMUX_Config (PORT_NUMBER_3, PIN_NUMBER_14, PINMUX_ALTERNATE_FUNCTION_1);
+    if(ret != ARM_DRIVER_OK)
+    {
+        return -1;
+    }
+
+    /* Configure GPIO Pin : P3_15 as UART6_TX_B */
+    ret = PINMUX_Config (PORT_NUMBER_3, PIN_NUMBER_15, PINMUX_ALTERNATE_FUNCTION_2);
     if(ret != ARM_DRIVER_OK)
     {
         return -1;
@@ -207,9 +223,10 @@ void tracef(const char * format, ...)
 
 #else
 
-int tracelib_init(const char * prefix)
+int tracelib_init(const char * prefix, ARM_USART_SignalEvent_t cb_event)
 {
     (void)prefix;
+    (void)cb_event;
     return 0;
 }
 
