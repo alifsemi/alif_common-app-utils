@@ -17,20 +17,16 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
-#include "Driver_PINMUX_AND_PINPAD.h"
+//#include "Driver_PINMUX_AND_PINPAD.h"
+#include "pinconf.h"
 
 
-/* Select used UART.
- *  Supported UARTs:
- *      UART2 (Pin P3_17)
- *      UART4 (Pin P3_2)
- */
 #if defined(M55_HP)
     #define UART    4
 #elif defined(M55_HE)
     #define UART    2
 #elif defined(A32)
-    #define UART    6
+    #define UART    5   // Was 6 in RevA
 #else
     #error "Undefined M55 CPU!"
 #endif
@@ -50,54 +46,21 @@ uint16_t prefix_len;
 
 static int hardware_init(void)
 {
-    int32_t ret;
-
 #if UART == 2
-    /* PINMUX UART2_B */
-
-    /* Configure GPIO Pin : P3_16 as UART2_RX_B */
-    ret = PINMUX_Config (PORT_NUMBER_3, PIN_NUMBER_16, PINMUX_ALTERNATE_FUNCTION_2);
-    if(ret != ARM_DRIVER_OK)
-    {
-        return -1;
-    }
-
-    /* Configure GPIO Pin : P3_17 as UART2_TX_B */
-    ret = PINMUX_Config (PORT_NUMBER_3, PIN_NUMBER_17, PINMUX_ALTERNATE_FUNCTION_2);
-    if(ret != ARM_DRIVER_OK)
-    {
-        return -1;
-    }
+    // PINMUX_Config(PORT_NUMBER_1, PIN_NUMBER_0, PINMUX_ALTERNATE_FUNCTION_1); // P1_0:RX  (mux mode 1)
+    // PINMUX_Config(PORT_NUMBER_1, PIN_NUMBER_1, PINMUX_ALTERNATE_FUNCTION_1); // P1_1:TX  (mux mode 1)
+    pinconf_set(PORT_1, PIN_0, PINMUX_ALTERNATE_FUNCTION_1, 0);
+    pinconf_set(PORT_1, PIN_1, PINMUX_ALTERNATE_FUNCTION_1, 1);
 #elif UART == 4
-    /* PINMUX UART4_B */
-
-    /* Configure GPIO Pin : P3_1 as UART4_RX_B */
-    ret = PINMUX_Config (PORT_NUMBER_3, PIN_NUMBER_1, PINMUX_ALTERNATE_FUNCTION_1);
-    if(ret != ARM_DRIVER_OK)
-    {
-        return -1;
-    }
-
-    /* Configure GPIO Pin : P3_2 as UART4_TX_B */
-    ret = PINMUX_Config (PORT_NUMBER_3, PIN_NUMBER_2, PINMUX_ALTERNATE_FUNCTION_1);
-    if(ret != ARM_DRIVER_OK)
-    {
-        return -1;
-    }
-#elif UART == 6
-    /* Configure GPIO Pin : P3_14 as UART6_RX_B */
-    ret = PINMUX_Config (PORT_NUMBER_3, PIN_NUMBER_14, PINMUX_ALTERNATE_FUNCTION_1);
-    if(ret != ARM_DRIVER_OK)
-    {
-        return -1;
-    }
-
-    /* Configure GPIO Pin : P3_15 as UART6_TX_B */
-    ret = PINMUX_Config (PORT_NUMBER_3, PIN_NUMBER_15, PINMUX_ALTERNATE_FUNCTION_2);
-    if(ret != ARM_DRIVER_OK)
-    {
-        return -1;
-    }
+    // PINMUX_Config(PORT_NUMBER_12, PIN_NUMBER_1, PINMUX_ALTERNATE_FUNCTION_2); // P12_1: RX  (mux mode 2)
+    // PINMUX_Config(PORT_NUMBER_12, PIN_NUMBER_2, PINMUX_ALTERNATE_FUNCTION_2); // P12_2: TX  (mux mode 2)
+    pinconf_set(PORT_12, PIN_1, PINMUX_ALTERNATE_FUNCTION_2, 0);
+    pinconf_set(PORT_12, PIN_2, PINMUX_ALTERNATE_FUNCTION_2, 1);
+#elif UART == 5
+    // PINMUX_Config(PORT_NUMBER_5, PIN_NUMBER_2, PINMUX_ALTERNATE_FUNCTION_2); // P5_2: RX  (mux mode 2)
+    // PINMUX_Config(PORT_NUMBER_5, PIN_NUMBER_3, PINMUX_ALTERNATE_FUNCTION_2); // P5_3: TX  (mux mode 2)
+    pinconf_set(PORT_5, PIN_2, PINMUX_ALTERNATE_FUNCTION_2, 0); // P5_2: RX  (mux mode 2)
+    pinconf_set(PORT_5, PIN_3, PINMUX_ALTERNATE_FUNCTION_2, 1); // P5_3: TX  (mux mode 2)
 #else
     #error Unsupported UART!
 #endif
