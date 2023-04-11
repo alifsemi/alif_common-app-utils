@@ -11,22 +11,21 @@
 // Uncomment this to disable traces to UART
 //#define DISABLE_UART_TRACE
 
+#include "board.h"
 #include "uart_tracelib.h"
 
 #if !defined(DISABLE_UART_TRACE)
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
-//#include "Driver_PINMUX_AND_PINPAD.h"
-#include "pinconf.h"
 
 
 #if defined(M55_HP)
-    #define UART    4
+    #define UART    BOARD_UART2_INSTANCE
 #elif defined(M55_HE)
-    #define UART    2
+    #define UART    BOARD_UART1_INSTANCE
 #elif defined(A32)
-    #define UART    5   // Was 6 in RevA
+    #define UART    BOARD_UART3_INSTANCE
 #else
     #error "Undefined M55 CPU!"
 #endif
@@ -44,30 +43,6 @@ static bool has_cb = false;
 uint16_t prefix_len;
 #define MAX_TRACE_LEN 256
 
-static int hardware_init(void)
-{
-#if UART == 2
-    // PINMUX_Config(PORT_NUMBER_1, PIN_NUMBER_0, PINMUX_ALTERNATE_FUNCTION_1); // P1_0:RX  (mux mode 1)
-    // PINMUX_Config(PORT_NUMBER_1, PIN_NUMBER_1, PINMUX_ALTERNATE_FUNCTION_1); // P1_1:TX  (mux mode 1)
-    pinconf_set(PORT_1, PIN_0, PINMUX_ALTERNATE_FUNCTION_1, 0);
-    pinconf_set(PORT_1, PIN_1, PINMUX_ALTERNATE_FUNCTION_1, 1);
-#elif UART == 4
-    // PINMUX_Config(PORT_NUMBER_12, PIN_NUMBER_1, PINMUX_ALTERNATE_FUNCTION_2); // P12_1: RX  (mux mode 2)
-    // PINMUX_Config(PORT_NUMBER_12, PIN_NUMBER_2, PINMUX_ALTERNATE_FUNCTION_2); // P12_2: TX  (mux mode 2)
-    pinconf_set(PORT_12, PIN_1, PINMUX_ALTERNATE_FUNCTION_2, 0);
-    pinconf_set(PORT_12, PIN_2, PINMUX_ALTERNATE_FUNCTION_2, 1);
-#elif UART == 5
-    // PINMUX_Config(PORT_NUMBER_5, PIN_NUMBER_2, PINMUX_ALTERNATE_FUNCTION_2); // P5_2: RX  (mux mode 2)
-    // PINMUX_Config(PORT_NUMBER_5, PIN_NUMBER_3, PINMUX_ALTERNATE_FUNCTION_2); // P5_3: TX  (mux mode 2)
-    pinconf_set(PORT_5, PIN_2, PINMUX_ALTERNATE_FUNCTION_2, 0); // P5_2: RX  (mux mode 2)
-    pinconf_set(PORT_5, PIN_3, PINMUX_ALTERNATE_FUNCTION_2, 1); // P5_3: TX  (mux mode 2)
-#else
-    #error Unsupported UART!
-#endif
-
-    return 0;
-}
-
 int tracelib_init(const char * prefix, ARM_USART_SignalEvent_t cb_event)
 {
     int32_t ret    = 0;
@@ -79,12 +54,7 @@ int tracelib_init(const char * prefix, ARM_USART_SignalEvent_t cb_event)
         prefix_len = 0;
     }
 
-    /* Initialize UART hardware pins using PinMux Driver. */
-    ret = hardware_init();
-    if(ret != 0)
-    {
-        return ret;
-    }
+    BOARD_Pinmux_Init();
 
     /* Initialize UART driver */
     if (cb_event) {
