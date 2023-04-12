@@ -54,8 +54,6 @@ int tracelib_init(const char * prefix, ARM_USART_SignalEvent_t cb_event)
         prefix_len = 0;
     }
 
-    BOARD_Pinmux_Init();
-
     /* Initialize UART driver */
     if (cb_event) {
         has_cb = true;
