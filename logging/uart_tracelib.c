@@ -18,6 +18,8 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
+#include <RTE_Components.h>
+#include CMSIS_device_header
 
 
 #if defined(M55_HP)
@@ -130,7 +132,7 @@ int send_str(const char* str, uint32_t len)
             return ret;
         }
 
-        while (USARTdrv->GetTxCount() != len);
+        while (USARTdrv->GetTxCount() != len) __WFE();
     }
     return ret;
 }
