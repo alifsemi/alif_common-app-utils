@@ -95,6 +95,8 @@ const char __stderr_name[] __attribute__((aligned(4))) = "STDERR";
 static char retarget_buf[RETARGET_BUF_MAX];
 static uint32_t retarget_buf_len = 0;
 
+static _Atomic clock_t clock_ticks;
+
 void _ttywrch(int ch) {
     (void)fputc(ch, stdout);
 }
@@ -315,9 +317,27 @@ time_t time(time_t *timer)
 
 void _clock_init(void) {}
 
+// We don't want automatically init systick but call it manually if needed.
+void clk_init()
+{
+    SysTick_Config(SystemCoreClock/CLOCKS_PER_SEC);
+}
+
+#define SysTick_CTRL_DISABLE_Msk            (0UL /*<< SysTick_CTRL_ENABLE_Pos*/)
+
+void clk_uninit()
+{
+    SysTick->CTRL &= ~(1UL << SysTick_CTRL_ENABLE_Pos); // Disable SysTick IRQ and SysTick Timer
+}
+
 clock_t clock(void)
 {
-    return (clock_t)-1;
+    return clock_ticks;
+}
+
+void SysTick_Handler(void)
+{
+    clock_ticks++;
 }
 
 int remove(const char *arg) {
