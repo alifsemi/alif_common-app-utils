@@ -384,50 +384,57 @@ static void FaultDump(void)
         printf("Exception %" PRId32 "\n", regs[16] & 0x1FF);
     }
 
-    uint32_t stack_top = VTOR_STACK_TOP;
-    printf("Stack top from VTOR: %08" PRIX32 "\n", stack_top);
+    uintptr_t stack_top = VTOR_STACK_TOP;
+    printf("Stack top from VTOR: %08" PRIXPTR "\n", stack_top);
     printf("\n==== Stack dump ====\n\n");
-    const uint32_t stack_point = regs[13];
+    const uintptr_t stack_point = regs[13];
 
     // not using the default stack so we have to just
     // print the defined maximum (STACK_DUMP_MAX_LINES)
-    if (stack_top < regs[13]) {
-        stack_top = 0xFFFFFFFF;
+    if (stack_top < stack_point) {
+        stack_top = UINTPTR_MAX;
     }
-    const uint32_t loop_start = stack_point & 0xFFFFFFF0;
 
     // these are for readability(?), can't be changed without modifying code below
     #define VALUES_PER_LINE 4
     #define BYTES_IN_VALUE 4
 
+    // start printing from aligned address
+    const uintptr_t loop_start = stack_point - stack_point % (VALUES_PER_LINE * BYTES_IN_VALUE);
+
     // Dump uint32 values from SP until stack top or until defined number of lines is printed
     printf("Address  :     3 2 1 0     7 6 5 4     B A 9 8     F E D C       ASCII Data\n");
     //      80008010 :    FFEEAABB    CC001133    12345678    1A2B3C4D    ....3...xV".M<+.
-    for (uint32_t *p = (uint32_t *)loop_start; p < ((uint32_t *)loop_start + STACK_DUMP_MAX_LINES * VALUES_PER_LINE) && p < (uint32_t *)stack_top; p += VALUES_PER_LINE)
-    {
-        char ascii[VALUES_PER_LINE * BYTES_IN_VALUE + 1];
-        ascii[VALUES_PER_LINE * BYTES_IN_VALUE] = 0;
+    for (uint32_t *p = (uint32_t *)loop_start; p < ((uint32_t *)loop_start + STACK_DUMP_MAX_LINES * VALUES_PER_LINE) && p < (uint32_t *)stack_top; p += VALUES_PER_LINE) {
+
         printf("%08" PRIXPTR " :", (uintptr_t)p);
         // print the stack values for 1 line
-        for (int value_i = 0; value_i < VALUES_PER_LINE; value_i++) {
-            if ((uint32_t)(p+value_i) >= stack_point && (uint32_t)(p+value_i) < stack_top) {
-                printf("    %08" PRIX32, *(p + value_i));
-                // insert the value to ascii buffer to be printed at the end of the line
-                for (int byte_in_value_i = 0; byte_in_value_i < BYTES_IN_VALUE; byte_in_value_i++) {
-                    if(isprint(*((unsigned char *)p + value_i * BYTES_IN_VALUE + byte_in_value_i))) {
-                        ascii[value_i * BYTES_IN_VALUE + byte_in_value_i] = *((char *)p + value_i * BYTES_IN_VALUE + byte_in_value_i);
-                    }
-                    else {
-                        ascii[value_i * BYTES_IN_VALUE + byte_in_value_i] = '.';
-                    }
-                }
+        for (uint32_t *vp = p; vp < p + VALUES_PER_LINE; vp++) {
+            if (vp >= (uint32_t*)stack_point && vp < (uint32_t*)stack_top) {
+                printf("    %08" PRIX32, *vp);
             }
             else {
                 printf("            ");
-                sprintf(ascii + value_i*BYTES_IN_VALUE, "    ");
             }
         }
-        printf("    %s\n", ascii);
+        printf("    ");
+
+        // print the ascii characters for one line
+        for (char *cp = (char *)p; cp < (char *)p + VALUES_PER_LINE * BYTES_IN_VALUE; cp++) {
+            if (cp >= (char*)stack_point && cp < (char*)stack_top) {
+                // only print printable ascii characters
+                if(*cp > 31 && *cp < 127) {
+                    putchar(*cp);
+                }
+                else {
+                    putchar('.');
+                }
+            }
+            else {
+                putchar(' ');
+            }
+        }
+        printf("\n");
     }
 
     for (;;) {
