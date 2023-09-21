@@ -59,6 +59,17 @@
 #endif
 #define ISTTY_FUNCTION RETARGET(_istty)
 
+#elif __ICCARM__
+/* IAR compiler re-targeting */
+typedef int FILEHANDLE;
+
+/* Standard IO device handles. */
+#define STDIN  0x00
+#define STDOUT 0x01
+#define STDERR 0x02
+
+#define RETARGET(fun) _##fun
+
 #else
 /* GNU compiler re-targeting */
 
@@ -83,7 +94,7 @@ extern FILEHANDLE _open(const char * /*name*/, int /*openmode*/);
 #define TMPNAM_FUNCTION RETARGET(_tmpnam)
 #define ISTTY_FUNCTION RETARGET(_isatty)
 
-#endif
+#endif /* GNU compiler re-targeting */
 
 /* Standard IO device name defines. */
 const char __stdin_name[] __attribute__((aligned(4)))  = "STDIN";
@@ -96,29 +107,6 @@ static char retarget_buf[RETARGET_BUF_MAX];
 static uint32_t retarget_buf_len = 0;
 
 static _Atomic clock_t clock_ticks;
-
-void _ttywrch(int ch) {
-    (void)fputc(ch, stdout);
-}
-
-FILEHANDLE RETARGET(_open)(const char *name, int openmode)
-{
-    UNUSED(openmode);
-
-    if (strcmp(name, __stdin_name) == 0) {
-        return (STDIN);
-    }
-
-    if (strcmp(name, __stdout_name) == 0) {
-        return (STDOUT);
-    }
-
-    if (strcmp(name, __stderr_name) == 0) {
-        return (STDERR);
-    }
-
-    return -1;
-}
 
 void flush_uart()
 {
@@ -138,81 +126,36 @@ __STATIC_FORCEINLINE uint32_t in_interrupt(void)
 #endif
 }
 
-
-int RETARGET(_write)(FILEHANDLE fh, const unsigned char *buf, unsigned int len, int mode)
-{
-    UNUSED(mode);
-
-    switch (fh) {
-    case STDOUT:
-    case STDERR: {
-        if(in_interrupt())
-        {
-           // this is ISR context so don't push to UART
-           if(retarget_buf_len < RETARGET_BUF_MAX)
-           {
-               // if we're full just drop
-               if (len > RETARGET_BUF_MAX - retarget_buf_len) {
-                   len = RETARGET_BUF_MAX - retarget_buf_len;
-               }
-               memcpy(retarget_buf + retarget_buf_len, buf, len);
-               retarget_buf_len += len;
-           }
-        }
-        else
-        {
-            flush_uart();
-            send_str((const char *) buf, len);
-        }
-#ifdef __ARMCC_VERSION
-        // armcc expects to get the amount of characters that were not written
-        return 0;
+#if __ICCARM__
+/*
+    Put IAR
+    __open()
+    __close()
+    __lseek()
+    here if needed.
+  
+    __write()
+    __read()
+    are implemented together with GCC and ARMCC
+*/
 #else
-        // gcc expects to get the amount of characters written
-        return len;
-#endif
-    }
-    default:
-        return -1;
-    }
-}
-
-int RETARGET(_read)(FILEHANDLE fh, unsigned char *buf, unsigned int len, int mode)
+FILEHANDLE RETARGET(_open)(const char *name, int openmode)
 {
-    UNUSED(mode);
+    UNUSED(openmode);
 
-    switch (fh) {
-    case STDIN: {
-        int c;
-        unsigned int read = 0;
-        bool eof = false;
-
-        while (read < len) {
-            c = fgetc(stdin);
-            if (c == EOF) {
-                eof = true;
-                break;
-            }
-
-            *buf++ = (unsigned char)c;
-            read++;
-        }
-
-#ifdef __ARMCC_VERSION
-        /* Return number of bytes not read, combined with an EOF flag */
-        return (eof ? (int) 0x80000000 : 0) | (len - read);
-#else
-        /* Return number of bytes read */
-        if (read > 0) {
-            return read;
-        } else {
-            return eof ? -1 : 0;
-        }
-#endif
+    if (strcmp(name, __stdin_name) == 0) {
+        return (STDIN);
     }
-    default:
-        return -1;
+
+    if (strcmp(name, __stdout_name) == 0) {
+        return (STDOUT);
     }
+
+    if (strcmp(name, __stderr_name) == 0) {
+        return (STDERR);
+    }
+
+    return -1;
 }
 
 int ISTTY_FUNCTION(FILEHANDLE fh)
@@ -251,22 +194,6 @@ long RETARGET(_lseek)(FILEHANDLE fh, long pos, int whence)
     return -1;
 }
 
-int RETARGET(_ensure)(FILEHANDLE fh)
-{
-    UNUSED(fh);
-
-    return -1;
-}
-
-long RETARGET(_flen)(FILEHANDLE fh)
-{
-    if (ISTTY_FUNCTION(fh)) {
-        return 0;
-    }
-
-    return -1;
-}
-
 int TMPNAM_FUNCTION(char* name, int sig, unsigned int maxlen)
 {
     UNUSED(name);
@@ -275,12 +202,100 @@ int TMPNAM_FUNCTION(char* name, int sig, unsigned int maxlen)
 
     return 1;
 }
+#endif // !__ICCARM__
 
-char *RETARGET(_command_string)(char *cmd, int len)
+/* read() function for all three compiler variants */
+/* IAR has slightly different prototype */
+#if __ICCARM__
+size_t RETARGET(_read)(FILEHANDLE fh, unsigned char* buf, size_t len)
 {
-    UNUSED(len);
+#else
+int RETARGET(_read)(FILEHANDLE fh, unsigned char *buf, unsigned int len, int mode)
+{
+    UNUSED(mode);
+#endif
 
-    return cmd;
+    switch (fh) {
+    case STDIN: {
+        int c;
+        unsigned int read = 0;
+        bool eof = false;
+
+        while (read < len) {
+
+            /* NOTE: stdin functionality has not been implemented
+                     If stdin is needed: read character from UART here */
+            c = -1;
+
+            if (c == EOF) {
+                eof = true;
+                break;
+            }
+
+            *buf++ = (unsigned char)c;
+            read++;
+        }
+
+#ifdef __ARMCC_VERSION
+        /* Return number of bytes not read, combined with an EOF flag */
+        return (eof ? (int) 0x80000000 : 0) | (len - read);
+#else
+        /* Return number of bytes read (GCC and IAR build) */
+        if (read > 0) {
+            return read;
+        } else {
+            return eof ? -1 : 0;
+        }
+#endif
+    }
+    default:
+        return -1;
+    }
+}
+
+/* write() function for all three compiler variants */
+/* IAR has slightly different prototype */
+#if __ICCARM__
+size_t RETARGET(_write)(FILEHANDLE fh, const unsigned char* buf, size_t len)
+{
+#else
+int RETARGET(_write)(FILEHANDLE fh, const unsigned char *buf, unsigned int len, int mode)
+{
+    UNUSED(mode);
+#endif
+
+    switch (fh) {
+    case STDOUT:
+    case STDERR: {
+        if(in_interrupt())
+        {
+           // this is ISR context so don't push to UART
+           if(retarget_buf_len < RETARGET_BUF_MAX)
+           {
+               // if we're full just drop
+               if (len > RETARGET_BUF_MAX - retarget_buf_len) {
+                   len = RETARGET_BUF_MAX - retarget_buf_len;
+               }
+               memcpy(retarget_buf + retarget_buf_len, buf, len);
+               retarget_buf_len += len;
+           }
+        }
+        else
+        {
+            flush_uart();
+            send_str((const char *) buf, len);
+        }
+#ifdef __ARMCC_VERSION
+        // armcc expects to get the amount of characters that were not written
+        return 0;
+#else
+        // GCC AND IAR builds expect to get the amount of characters written
+        return len;
+#endif
+    }
+    default:
+        return -1;
+    }
 }
 
 void RETARGET(_exit)(int return_code)
@@ -289,7 +304,7 @@ void RETARGET(_exit)(int return_code)
 
     putchar('\n');
 
-    __BKPT();
+    __BKPT(0);
     while(1) {
         __WFE();
     }
@@ -354,29 +369,32 @@ int rename(const char *oldn, const char *newn)
     return 0;
 }
 
-int fgetc(FILE *f)
-{
-    UNUSED(f);
+#ifdef __ARMCC_VERSION
+/* ARMCC specific functions */
+void _ttywrch(int ch) {
+    (void)fputc(ch, stdout);
+}
 
-    //return UartPutc(UartGetc());
+long RETARGET(_flen)(FILEHANDLE fh)
+{
+    if (ISTTY_FUNCTION(fh)) {
+        return 0;
+    }
+
     return -1;
 }
 
-#ifndef ferror
-
-/* arm-none-eabi-gcc with newlib uses a define for ferror */
-int ferror(FILE *f)
+char *RETARGET(_command_string)(char *cmd, int len)
 {
-    UNUSED(f);
+    UNUSED(len);
 
-    return EOF;
+    return cmd;
 }
+#elif __ICCARM__
+/* IAR specific functions */
 
-#endif /* #ifndef ferror */
-
-/* More newlib functions */
-#ifndef __ARMCC_VERSION
-
+#else
+/* More newlib functions (GCC build) */
 struct stat;
 int _fstat(int f, struct stat *buf)
 {
@@ -402,6 +420,16 @@ int _kill(int pid, int sig)
     return -1;
 }
 
-#endif // !defined __ARMCC_VERSION
+#ifndef ferror
+/* arm-none-eabi-gcc with newlib uses a define for ferror */
+int ferror(FILE *f)
+{
+    UNUSED(f);
+
+    return EOF;
+}
+#endif /* #ifndef ferror */
+
+#endif // GCC build
 
 #endif // USE_SEMIHOSTING
