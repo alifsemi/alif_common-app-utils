@@ -106,7 +106,9 @@ const char __stderr_name[] __attribute__((aligned(4))) = "STDERR";
 static char retarget_buf[RETARGET_BUF_MAX];
 static uint32_t retarget_buf_len = 0;
 
+#ifndef A32
 static _Atomic clock_t clock_ticks;
+#endif
 
 void flush_uart()
 {
@@ -133,7 +135,7 @@ __STATIC_FORCEINLINE uint32_t in_interrupt(void)
     __close()
     __lseek()
     here if needed.
-  
+
     __write()
     __read()
     are implemented together with GCC and ARMCC
@@ -333,6 +335,7 @@ time_t time(time_t *timer)
 void _clock_init(void) {}
 
 // We don't want automatically init systick but call it manually if needed.
+#ifndef A32
 void clk_init()
 {
     SysTick_Config(SystemCoreClock/CLOCKS_PER_SEC);
@@ -354,6 +357,7 @@ void SysTick_Handler(void)
 {
     clock_ticks++;
 }
+#endif
 
 int remove(const char *arg) {
     UNUSED(arg);
