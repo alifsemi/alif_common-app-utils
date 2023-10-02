@@ -36,7 +36,7 @@ __STATIC_FORCEINLINE uint32_t alifs_profile_start()
     uint32_t value;
 
     // Enable cycle counter register (PMCNTENSET)
-    value =(unsigned long)( 1 << PMCCNTR_BIT);
+    value = (1UL << PMCCNTR_BIT);
     __set_CP(15, 0, value, 9, 12, 1);
 
     // Configure cycle counter register (PMCR)
@@ -48,14 +48,14 @@ __STATIC_FORCEINLINE uint32_t alifs_profile_start()
     __set_CP(15, 0, value, 9, 12, 0);
 
     //read current cyclecounter value
-    __get_CP(15, 2, value, 0, 0, 0);
+    __get_CP(15, 0, value, 9, 13, 0);
     return value;
 }
 
 __STATIC_FORCEINLINE uint32_t alifs_profile_end(const uint32_t counter_start_value)
 {
     uint32_t value;
-  __get_CP(15, 2, value, 0, 0, 0);
+  __get_CP(15, 0, value, 9, 13, 0);
   return (value - counter_start_value);
 }
 
