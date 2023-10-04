@@ -335,7 +335,38 @@ time_t time(time_t *timer)
 void _clock_init(void) {}
 
 // We don't want automatically init systick but call it manually if needed.
-#ifndef A32
+#ifdef A32
+__STATIC_FORCEINLINE uint32_t __get_CNTFRQ(void)
+{
+  uint32_t result;
+  __get_CP(15, 0, result, 14, 0, 0);
+  return result;
+}
+
+__STATIC_FORCEINLINE uint64_t __get_CNTPCT(void)
+{
+  uint64_t result;
+  __get_CP64(15, 1, result, 14);
+  return result;
+}
+
+static uint64_t clock_epoch_start;
+
+void clk_init()
+{
+    // We assume the counter is started at system init
+    clock_epoch_start = __get_CNTPCT();
+}
+
+void clk_uninit()
+{
+}
+
+clock_t clock(void)
+{
+    return (__get_CNTPCT() - clock_epoch_start) / (__get_CNTFRQ() / CLOCKS_PER_SEC);
+}
+#else
 void clk_init()
 {
     SysTick_Config(SystemCoreClock/CLOCKS_PER_SEC);
