@@ -21,22 +21,8 @@
 #include <RTE_Components.h>
 #include CMSIS_device_header
 
-
-#if defined(M55_HP)
-    #define UART    BOARD_UART2_INSTANCE
-#elif defined(M55_HE)
-    #define UART    BOARD_UART1_INSTANCE
-#elif defined(A32)
-    #define UART    BOARD_UART3_INSTANCE
-#else
-    #error "Undefined M55 CPU!"
-#endif
-
-/* UART Driver */
-extern ARM_DRIVER_USART ARM_Driver_USART_(UART);
-
 /* UART Driver instance */
-static ARM_DRIVER_USART *USARTdrv = &ARM_Driver_USART_(UART);
+static ARM_DRIVER_USART *USARTdrv;
 
 volatile uint32_t uart_event;
 static bool initialized = false;
@@ -48,6 +34,35 @@ uint16_t prefix_len;
 int tracelib_init(const char * prefix, ARM_USART_SignalEvent_t cb_event)
 {
     int32_t ret    = 0;
+
+#if defined(M55_HE)
+    extern ARM_DRIVER_USART ARM_Driver_USART_(BOARD_UART1_INSTANCE);
+    USARTdrv = &ARM_Driver_USART_(BOARD_UART1_INSTANCE);
+#elif defined(M55_HP)
+    extern ARM_DRIVER_USART ARM_Driver_USART_(BOARD_UART2_INSTANCE);
+    USARTdrv = &ARM_Driver_USART_(BOARD_UART2_INSTANCE);
+#elif defined(A32)
+    int cpuid = __get_MPIDR() & 0xFF;
+    switch (cpuid) {
+#ifdef BOARD_UART3_INSTANCE
+    extern ARM_DRIVER_USART ARM_Driver_USART_(BOARD_UART3_INSTANCE);
+    case 0:
+        USARTdrv = &ARM_Driver_USART_(BOARD_UART3_INSTANCE);
+        break;
+#endif
+#ifdef BOARD_UART4_INSTANCE
+    extern ARM_DRIVER_USART ARM_Driver_USART_(BOARD_UART4_INSTANCE);
+    case 1:
+        USARTdrv = &ARM_Driver_USART_(BOARD_UART4_INSTANCE);
+        break;
+#endif
+    default:
+        return ARM_DRIVER_ERROR_UNSUPPORTED;
+    }
+#else
+    #error "Undefined CPU!"
+#endif
+
 
     tr_prefix = prefix;
     if (tr_prefix) {
