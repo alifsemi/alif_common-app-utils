@@ -38,6 +38,8 @@
 
 #include "uart_tracelib.h"
 
+#define UNUSED(x) (void)(x)
+
 #if defined(__ARMCC_VERSION) && (__ARMCC_VERSION >= 6100100)
 /* Arm compiler re-targeting */
 
@@ -73,6 +75,8 @@ typedef int FILEHANDLE;
 #else
 /* GNU compiler re-targeting */
 
+#include <sys/stat.h>
+
 /*
  * This type is used by the _ I/O functions to denote an open
  * file.
@@ -100,7 +104,6 @@ extern FILEHANDLE _open(const char * /*name*/, int /*openmode*/);
 const char __stdin_name[] __attribute__((aligned(4)))  = "STDIN";
 const char __stdout_name[] __attribute__((aligned(4))) = "STDOUT";
 const char __stderr_name[] __attribute__((aligned(4))) = "STDERR";
-#define UNUSED(x) (void)(x)
 
 #define RETARGET_BUF_MAX 128
 static char retarget_buf[RETARGET_BUF_MAX];
