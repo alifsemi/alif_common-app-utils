@@ -11,86 +11,58 @@
 // Uncomment this to disable traces to UART
 //#define DISABLE_UART_TRACE
 
-#include "Driver_USART.h"
+#include "board.h"
+#include "uart_tracelib.h"
 
 #if !defined(DISABLE_UART_TRACE)
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
-#include "Driver_PINMUX_AND_PINPAD.h"
-
-
-/* Select used UART.
- *  Supported UARTs:
- *      UART2 (Pin P3_17)
- *      UART4 (Pin P3_2)
- */
-#if defined(M55_HP)
-    #define UART    4
-#elif defined(M55_HE)
-    #define UART    2
-#else
-    #error "Undefined M55 CPU!"
-#endif
-
-/* UART Driver */
-extern ARM_DRIVER_USART ARM_Driver_USART_(UART);
+#include <RTE_Components.h>
+#include CMSIS_device_header
 
 /* UART Driver instance */
-static ARM_DRIVER_USART *USARTdrv = &ARM_Driver_USART_(UART);
+static ARM_DRIVER_USART *USARTdrv;
 
 volatile uint32_t uart_event;
 static bool initialized = false;
 const char * tr_prefix = NULL;
+static bool has_cb = false;
 uint16_t prefix_len;
 #define MAX_TRACE_LEN 256
 
-static int hardware_init(void)
-{
-    int32_t ret;
-
-#if UART == 2
-    /* PINMUX UART2_B */
-
-    /* Configure GPIO Pin : P3_16 as UART2_RX_B */
-    ret = PINMUX_Config (PORT_NUMBER_3, PIN_NUMBER_16, PINMUX_ALTERNATE_FUNCTION_2);
-    if(ret != ARM_DRIVER_OK)
-    {
-        return -1;
-    }
-
-    /* Configure GPIO Pin : P3_17 as UART2_TX_B */
-    ret = PINMUX_Config (PORT_NUMBER_3, PIN_NUMBER_17, PINMUX_ALTERNATE_FUNCTION_2);
-    if(ret != ARM_DRIVER_OK)
-    {
-        return -1;
-    }
-#elif UART == 4
-    /* PINMUX UART4_B */
-
-    /* Configure GPIO Pin : P3_1 as UART4_RX_B */
-    ret = PINMUX_Config (PORT_NUMBER_3, PIN_NUMBER_1, PINMUX_ALTERNATE_FUNCTION_1);
-    if(ret != ARM_DRIVER_OK)
-    {
-        return -1;
-    }
-
-    /* Configure GPIO Pin : P3_2 as UART4_TX_B */
-    ret = PINMUX_Config (PORT_NUMBER_3, PIN_NUMBER_2, PINMUX_ALTERNATE_FUNCTION_1);
-    if(ret != ARM_DRIVER_OK)
-    {
-        return -1;
-    }
-#else
-    #error Unsupported UART!
-#endif
-
-    return 0;
-}
-
-int tracelib_init(const char * prefix)
+int tracelib_init(const char * prefix, ARM_USART_SignalEvent_t cb_event)
 {
     int32_t ret    = 0;
+
+#if defined(M55_HE)
+    extern ARM_DRIVER_USART ARM_Driver_USART_(BOARD_UART1_INSTANCE);
+    USARTdrv = &ARM_Driver_USART_(BOARD_UART1_INSTANCE);
+#elif defined(M55_HP)
+    extern ARM_DRIVER_USART ARM_Driver_USART_(BOARD_UART2_INSTANCE);
+    USARTdrv = &ARM_Driver_USART_(BOARD_UART2_INSTANCE);
+#elif defined(A32)
+    int cpuid = __get_MPIDR() & 0xFF;
+    switch (cpuid) {
+#ifdef BOARD_UART3_INSTANCE
+    extern ARM_DRIVER_USART ARM_Driver_USART_(BOARD_UART3_INSTANCE);
+    case 0:
+        USARTdrv = &ARM_Driver_USART_(BOARD_UART3_INSTANCE);
+        break;
+#endif
+#ifdef BOARD_UART4_INSTANCE
+    extern ARM_DRIVER_USART ARM_Driver_USART_(BOARD_UART4_INSTANCE);
+    case 1:
+        USARTdrv = &ARM_Driver_USART_(BOARD_UART4_INSTANCE);
+        break;
+#endif
+    default:
+        return ARM_DRIVER_ERROR_UNSUPPORTED;
+    }
+#else
+    #error "Undefined CPU!"
+#endif
+
 
     tr_prefix = prefix;
     if (tr_prefix) {
@@ -99,15 +71,11 @@ int tracelib_init(const char * prefix)
         prefix_len = 0;
     }
 
-    /* Initialize UART hardware pins using PinMux Driver. */
-    ret = hardware_init();
-    if(ret != 0)
-    {
-        return ret;
-    }
-
     /* Initialize UART driver */
-    ret = USARTdrv->Initialize(NULL);
+    if (cb_event) {
+        has_cb = true;
+    }
+    ret = USARTdrv->Initialize(cb_event);
     if(ret != ARM_DRIVER_OK)
     {
         return ret;
@@ -159,8 +127,9 @@ int receive_str(char* str, uint32_t len)
         {
             return ret;
         }
-
-        while (USARTdrv->GetRxCount() != len);
+        if (has_cb == false) {
+            while (USARTdrv->GetRxCount() != len);
+        }
     }
     return ret;
 }
@@ -178,7 +147,7 @@ int send_str(const char* str, uint32_t len)
             return ret;
         }
 
-        while (USARTdrv->GetTxCount() != len);
+        while (USARTdrv->GetTxCount() != len) __WFE();
     }
     return ret;
 }
@@ -202,9 +171,10 @@ void tracef(const char * format, ...)
 
 #else
 
-int tracelib_init(const char * prefix)
+int tracelib_init(const char * prefix, ARM_USART_SignalEvent_t cb_event)
 {
     (void)prefix;
+    (void)cb_event;
     return 0;
 }
 
