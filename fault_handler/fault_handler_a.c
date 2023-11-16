@@ -131,10 +131,37 @@ static const char mode_names[] = {
     "SYS"
 };
 
+__STATIC_FORCEINLINE uint32_t __get_DFAR(void)
+{
+  uint32_t result;
+  __get_CP(15, 0, result, 6, 0, 0);
+  return result;
+}
+
+__STATIC_FORCEINLINE uint32_t __get_IFAR(void)
+{
+  uint32_t result;
+  __get_CP(15, 0, result, 6, 0, 2);
+  return result;
+}
+
 __attribute__((used))
 static void FaultDump(void)
 {
     printf("\n==== %s exception ====\n\n", FaultNames[fault_type]);
+
+    switch (fault_type) {
+    case FT_DataAbort:
+        printf("DFSR = %08" PRIX32 "\n", __get_DFSR());
+        printf("DFAR = %08" PRIX32 "\n\n", __get_DFAR());
+        break;
+    case FT_PrefetchAbort:
+        printf("IFSR = %08" PRIX32 "\n", __get_IFSR());
+        printf("IFAR = %08" PRIX32 "\n\n", __get_IFAR());
+        break;
+    case FT_Undefined:
+        break;
+    }
 
     printf("Register dump (stored at &%08" PRIXPTR ") is:\n", (uintptr_t) regs);
     for (int i = 0; i < 16; i++) {
