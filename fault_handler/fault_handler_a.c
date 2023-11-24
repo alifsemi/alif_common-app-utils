@@ -131,6 +131,52 @@ static const char mode_names[] = {
     "SYS"
 };
 
+static const char * const fault_status_text[32] = {
+    [0x01] = "Alignment fault",
+    [0x02] = "Debug exception",
+    [0x03] = "Access flag fault, level 1",
+    [0x04] = "Fault on instruction cache maintenance",
+    [0x05] = "Translation fault, level 1",
+    [0x06] = "Access flag fault, level 2",
+    [0x07] = "Translation fault, level 2",
+    [0x08] = "Synchronous External abort",
+    [0x09] = "Domain fault, level 1",
+    [0x0B] = "Domain fault, level 2",
+    [0x0C] = "Synchronous External abort, on translation table walk, level 1",
+    [0x0D] = "Permission fault, level 1",
+    [0x0E] = "Synchronous External abort, on translation table walk, level 2",
+    [0x0F] = "Permission fault, level 2",
+    [0x10] = "TLB conflict abort",
+    [0x14] = "Lockdown fault",
+    [0x15] = "Unsupported Exclusive access fault",
+    [0x16] = "SError interrupt",
+    [0x18] = "SError interrupt, parity or ECC error on memory access",
+    [0x19] = "Synchronous parity or ECC error on memory access",
+    [0x1C] = "Synchronous parity or ECC error on translation table walk, level 1",
+    [0x1E] = "Synchronous parity or ECC error on translation table walk, level 2",
+};
+
+__STATIC_FORCEINLINE uint32_t __get_TTBCR(void)
+{
+  uint32_t result;
+  __get_CP(15, 0, result, 2, 0, 2);
+  return result;
+}
+
+static const char *fault_status(uint32_t fsr)
+{
+    /* We only decode the ARMv7 format of FSR registers, which are used
+     * when TTBCR.EAE=0. If we update the startup/MMU code to use ARMv8
+     * mode (TTBCR.EAE=1), new decode is needed.
+     */
+    if (__get_TTBCR() & 0x80000000) {
+        return "? (TTBCR.EAE = 1)";
+    }
+    unsigned fs = ((fsr & 0x400) >> 6) | (fsr & 0xF);
+    const char *desc = fault_status_text[fs];
+    return desc ? desc : "?";
+}
+
 __STATIC_FORCEINLINE uint32_t __get_DFAR(void)
 {
   uint32_t result;
@@ -152,13 +198,19 @@ static void FaultDump(void)
 
     switch (fault_type) {
     case FT_DataAbort:
-        printf("DFSR = %08" PRIX32 "\n", __get_DFSR());
+    {
+        uint32_t dfsr = __get_DFSR();
+        printf("DFSR = %08" PRIX32 " (%s)\n", dfsr, fault_status(dfsr));
         printf("DFAR = %08" PRIX32 "\n\n", __get_DFAR());
         break;
+    }
     case FT_PrefetchAbort:
-        printf("IFSR = %08" PRIX32 "\n", __get_IFSR());
+    {
+        uint32_t ifsr = __get_IFSR();
+        printf("IFSR = %08" PRIX32 " (%s)\n", ifsr, fault_status(ifsr));
         printf("IFAR = %08" PRIX32 "\n\n", __get_IFAR());
         break;
+    }
     case FT_Undefined:
         break;
     }
