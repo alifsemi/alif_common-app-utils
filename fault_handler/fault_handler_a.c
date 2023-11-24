@@ -34,7 +34,7 @@ static const char *const FaultNames[] = {
     [FT_DataAbort] = "Data Abort"
 };
 
-static char flag_names[] = "NZCVQ000000LGGGG000000EAIFT";
+static const char flag_names[] = "NZCVQ000000LGGGG000000EAIFT";
 
 __attribute__((used))
 static enum FaultType fault_type;
