@@ -20,14 +20,36 @@
 
 #include CMSIS_device_header
 
+// Suppress bogus warning:  Warning in inline assembly: "SP as destination register is unpredictable"
+#if __ICCARM__
+#pragma diag_suppress=Og014
+#endif
+
 #define MMFSR (((volatile uint8_t *) &SCB->CFSR)[0])
 #define BFSR (((volatile uint8_t *) &SCB->CFSR)[1])
 #define UFSR (((volatile uint16_t *) &SCB->CFSR)[1])
 
 #define VTOR_STACK_TOP (((volatile uint32_t*)SCB->VTOR)[0])
+#define xstr(s) str(s)
+#define str(s) #s
+
+// Enable placing fault handler related data to separate sections since they
+// are not performance critical
+#define FAULT_HANDLER_RW_MEMORY_LOCATION __attribute__((section(".bss.slow")))
+#define FAULT_HANDLER_RO_MEMORY_LOCATION __attribute__((section(".rodata.slow")))
+#define FAULT_HANDLER_XO_MEMORY_LOCATION __attribute__((section(".text.slow")))
 
 #define STACK_DUMP_MAX_LINES 20
 
+// Size of the fault stack in bytes
+#define FAULT_STACK_SIZE 1024
+
+
+#define FAULT_STACK_WORDS (FAULT_STACK_SIZE / 4)
+static uint32_t fault_stack[FAULT_STACK_WORDS] FAULT_HANDLER_RW_MEMORY_LOCATION __ALIGNED(8);
+
+// These values are written to R0 by magic number in dedicated fault handler before jumping
+// to common one so they need to be in sync.
 enum FaultType {
     FT_HardFault = 0,
     FT_MemManage = 1,
@@ -37,7 +59,7 @@ enum FaultType {
     FT_DebugMonitor = 5
 };
 
-static const char *const FaultNames[] = {
+static const char *const FaultNames[] FAULT_HANDLER_RO_MEMORY_LOCATION = {
     [FT_HardFault]  = "HardFault",
     [FT_MemManage]  = "MemManage",
     [FT_BusFault]   = "BusFault",
@@ -46,18 +68,19 @@ static const char *const FaultNames[] = {
     [FT_DebugMonitor] = "DebugMonitor"
 };
 
-static char flag_names[] = "NZCVQIIT00B0GGGG";
+static const char flag_names[] FAULT_HANDLER_RO_MEMORY_LOCATION = "NZCVQIIT00B0GGGG";
 
-static enum FaultType fault_type;
-static uint32_t exc_return;
-static uint32_t regs[17];
-static void FaultDump(void);
-
+static enum FaultType fault_type FAULT_HANDLER_RW_MEMORY_LOCATION;
+static uint32_t exc_return FAULT_HANDLER_RW_MEMORY_LOCATION;
+static uint32_t regs[17] FAULT_HANDLER_RW_MEMORY_LOCATION;
 static bool fault_dump_enabled;
+static bool fault_handler_active;
+
+static void FaultDump(void);
 
 /* Compressed encoding of bits - bit number, then name, ending with space (32) */
 /* Octal bit number encoding, because C - it's either that or hex */
-static const char mmfsr_bits[] = {
+static const char mmfsr_bits[] FAULT_HANDLER_RO_MEMORY_LOCATION = {
     "\007MMARVALID"
     "\005MLSPERR"
     "\004MSTKERR"
@@ -67,7 +90,7 @@ static const char mmfsr_bits[] = {
     " "
 };
 
-static const char bfsr_bits[] = {
+static const char bfsr_bits[] FAULT_HANDLER_RO_MEMORY_LOCATION = {
     "\007BFARVALID"
     "\005LSPERR"
     "\004STKERR"
@@ -78,7 +101,7 @@ static const char bfsr_bits[] = {
     " "
 };
 
-static const char ufsr_bits[] = {
+static const char ufsr_bits[] FAULT_HANDLER_RO_MEMORY_LOCATION = {
     "\011DIVBYZERO"
     "\010UNALIGNED"
     "\004STKOF"
@@ -89,14 +112,14 @@ static const char ufsr_bits[] = {
     " "
 };
 
-static const char hfsr_bits[] = {
+static const char hfsr_bits[] FAULT_HANDLER_RO_MEMORY_LOCATION = {
     "\037DEBUGEVT"
     "\036FORCED"
     "\001VECTBL"
     " "
 };
 
-static const char sfsr_bits[] = {
+static const char sfsr_bits[] FAULT_HANDLER_RO_MEMORY_LOCATION = {
     "\007LSERR"
     "\006SFARVALID"
     "\005LSPERR"
@@ -108,7 +131,7 @@ static const char sfsr_bits[] = {
     " "
 };
 
-static const char dfsr_bits[] = {
+static const char dfsr_bits[] FAULT_HANDLER_RO_MEMORY_LOCATION = {
     "\005PMU"
     "\004EXTERNAL"
     "\003VCATCH"
@@ -119,7 +142,7 @@ static const char dfsr_bits[] = {
 };
 
 #if __CORTEX_M == 55
-static const char afsr_bits[] = {
+static const char afsr_bits[] FAULT_HANDLER_RO_MEMORY_LOCATION = {
     "\036FPOISON"
     "\035FTGU"
     "\034FECC"
@@ -149,6 +172,7 @@ static const char afsr_bits[] = {
 };
 #endif
 
+FAULT_HANDLER_XO_MEMORY_LOCATION
 static void print_fsrbits(uint32_t val, const char *bitnames)
 {
      bool first = true;
@@ -170,6 +194,7 @@ static void print_fsrbits(uint32_t val, const char *bitnames)
      puts(first ? "" : ")");
 }
 
+FAULT_HANDLER_XO_MEMORY_LOCATION
 static void print_memmanage(void)
 {
      uint32_t mmfsr = MMFSR;
@@ -184,6 +209,7 @@ static void print_memmanage(void)
      MMFSR = mmfsr;
 }
 
+FAULT_HANDLER_XO_MEMORY_LOCATION
 static void print_busfault(void)
 {
      uint32_t bfsr = BFSR;
@@ -205,6 +231,7 @@ static void print_busfault(void)
      BFSR = bfsr;
 }
 
+FAULT_HANDLER_XO_MEMORY_LOCATION
 static void print_usagefault(void)
 {
      uint32_t ufsr = UFSR;
@@ -216,6 +243,7 @@ static void print_usagefault(void)
      UFSR = ufsr;
 }
 
+FAULT_HANDLER_XO_MEMORY_LOCATION
 static void print_hardfault(void)
 {
      uint32_t hfsr = SCB->HFSR;
@@ -227,6 +255,7 @@ static void print_hardfault(void)
      SCB->HFSR = hfsr;
 }
 
+FAULT_HANDLER_XO_MEMORY_LOCATION
 static void print_securefault(void)
 {
      uint32_t sfsr = SCB->SFSR;
@@ -238,6 +267,7 @@ static void print_securefault(void)
      SCB->SFSR = sfsr;
 }
 
+FAULT_HANDLER_XO_MEMORY_LOCATION
 static void print_debugfault(void)
 {
      uint32_t dfsr = SCB->DFSR;
@@ -249,6 +279,7 @@ static void print_debugfault(void)
      SCB->DFSR = dfsr;
 }
 
+FAULT_HANDLER_XO_MEMORY_LOCATION
 static void print_faults(void)
 {
     print_usagefault();
@@ -259,10 +290,16 @@ static void print_faults(void)
     print_hardfault();
 }
 
+bool in_fault_handler(void)
+{
+    return fault_handler_active;
+}
+
 /* External activation function serves to ensure this file is pulled in, and the weak default handlers are overridden */
 void fault_dump_enable(bool enable)
 {
     fault_dump_enabled = enable;
+    fault_handler_active = false;
 
     /* Show any pending faults (shouldn't be any) and clear registers */
     print_faults();
@@ -277,55 +314,77 @@ void fault_dump_enable(bool enable)
 __attribute__((naked))
 void HardFault_Handler(void)
 {
-    __asm("MOVS R0, #0; B CommonAsmFaultHandler");
+    __asm("MOVS R0, #0\n\t"
+          "B CommonAsmFaultHandler\n\t");
 }
 
 __attribute__((naked))
 void MemManage_Handler(void)
 {
-    __asm("MOVS R0, #1; B CommonAsmFaultHandler");
+    __asm("MOVS R0, #1\n\t"
+          "B CommonAsmFaultHandler\n\t");
 }
 
 __attribute__((naked))
 void BusFault_Handler(void)
 {
-    __asm("MOVS R0, #2; B CommonAsmFaultHandler");
+    __asm("MOVS R0, #2\n\t"
+          "B CommonAsmFaultHandler\n\t");
 }
 
 __attribute__((naked))
 void UsageFault_Handler(void)
 {
-    __asm("MOVS R0, #3; B CommonAsmFaultHandler");
+    __asm("MOVS R0, #3\n\t"
+          "B CommonAsmFaultHandler\n\t");
 }
 
 __attribute__((naked))
 void SecureFault_Handler(void)
 {
-    __asm("MOVS R0, #4; B CommonAsmFaultHandler");
+    __asm("MOVS R0, #4\n\t"
+          "B CommonAsmFaultHandler\n\t");
 }
 
 __attribute__((naked))
 void DebugMonitor_Handler(void)
 {
-    __asm("MOVS R0, #5; B CommonAsmFaultHandler");
+    __asm("MOVS R0, #5\n\t"
+          "B CommonAsmFaultHandler\n\t");
 }
 
 __attribute__((used))
 __attribute__((naked))
+FAULT_HANDLER_XO_MEMORY_LOCATION
 static void CommonAsmFaultHandler(void /* int type */)
 {
+    // FaultType is set to R0 by specific handler functions before jumping here
+    // This prepares the remaining arguments for CommonFaultHandler in R1-R3
     __asm("LDR   R1, =regs+4*4\n\t"
-          "STM   R1, {R4-R11}\n\t"
-          "TST   LR, #1<<2\n\t"
-          "ITE   EQ\n\t"
-          "MOVEQ R1, SP\n\t"
-          "MRSNE R1, PSP\n\t"
-          "MOV   R2, LR\n\t"
+          "STM   R1, {R4-R11}\n\t"  // store R4-R11
+          "TST   LR, #1<<2\n\t"     // check which stack was in used when fault happened
+          "ITTEE EQ\n\t"
+          "MOVEQ R1, SP\n\t"        // MSP was used, store pointer to R1 and limit to R3
+          "MRSEQ R3, MSPLIM\n\t"
+          "MRSNE R1, PSP\n\t"       // PSP was used, store pointer to R1 and limit to R3
+          "MRSNE R3, PSPLIM\n\t"
+          "MOV   R2, LR\n\t"        // store LR to R2
+          "LDR   SP, =fault_stack+4*" xstr(FAULT_STACK_SIZE) "-32\n\t" // switch to dedicated fault dump stack
+          "LDR   R4, =fault_stack\n\t"
+          "MSR   MSPLIM, R4\n\t"    // set proper stack limit for the dedicated fault dump stack
           "B     CommonFaultHandler");
 }
 
+FAULT_HANDLER_XO_MEMORY_LOCATION
+static void JumpToDump(uint32_t exc_return, uint32_t* sp)
+{
+    __asm("MOV   SP, %0\n\t" // sp parameter to SP
+          "BX    %1" :: "r"(sp), "r"(exc_return));
+}
+
 __attribute__((used))
-static void CommonFaultHandler(enum FaultType type, uint32_t * restrict sp, uint32_t lr)
+FAULT_HANDLER_XO_MEMORY_LOCATION
+static void CommonFaultHandler(enum FaultType type, uint32_t * restrict sp, uint32_t lr, uint32_t* orig_splim)
 {
     if (!fault_dump_enabled) {
         while (1) {
@@ -335,6 +394,9 @@ static void CommonFaultHandler(enum FaultType type, uint32_t * restrict sp, uint
 
     // Prevent infinite loop in case fault dumping generates a new fault
     fault_dump_enabled = false;
+
+    // Mark fault handler active for retarget printing logic
+    fault_handler_active = true;
 
     exc_return = lr;
     fault_type = type;
@@ -346,19 +408,40 @@ static void CommonFaultHandler(enum FaultType type, uint32_t * restrict sp, uint
     regs[2] = sp[2];
     regs[3] = sp[3];
     regs[12] = sp[4];
+
     // For SP, we need to see if we pushed an integer-only or FP context, and also check for doubleword alignment adjustment
-    regs[13] = (uint32_t) sp + (exc_return & 0x10 ? 0x20 : 0x68) + (retpsr & 0x200 ? 4 : 0);
+    if((UFSR & 0x10) && sp == orig_splim) {
+        regs[13] = (uint32_t)sp;
+        retpsr = 0;  // can't trust that stack frame contains sane values as this is stack overflow fault
+    }
+    else {
+        regs[13] = (uint32_t)sp + (exc_return & 0x10 ? 0x20 : 0x68) + (retpsr & 0x200 ? 4 : 0);
+    }
     regs[14] = sp[5];
     regs[15] = sp[6];
     regs[16] = sp[7];
 
-    // Clear IT/ECI/ICI bits in the fault frame - we're not resuming from the exception location
-    sp[7] &= ~((3 << 25) | (0x3F << 10));
+    // initialize stack values for 'return' to FaultDump
+    fault_stack[FAULT_STACK_WORDS-1] = (1 << 24) | (retpsr & 0x1FF); // RETPSR, only set T32 state and exception state
+    fault_stack[FAULT_STACK_WORDS-2] = (uint32_t) FaultDump;  // Return Address, this is where EXC_RETURN will return to later on
+    fault_stack[FAULT_STACK_WORDS-3] = 0xEFFFFFFE;  // LR, deliberately set to 'illegal' execution address as we're not expecting FaultDump to return
+    fault_stack[FAULT_STACK_WORDS-4] = 0;  // R12
+    fault_stack[FAULT_STACK_WORDS-5] = 0;  // R3
+    fault_stack[FAULT_STACK_WORDS-6] = 0;  // R2
+    fault_stack[FAULT_STACK_WORDS-7] = 0;  // R1
+    fault_stack[FAULT_STACK_WORDS-8] = 0;  // R0
 
-    // Modify the fault frame so we "return" to the FaultDump routine, which hopefully will execute okay
-    sp[6] = (uint32_t) FaultDump;
+    // 'return' to FaultDump by setting SP so stack only contains standard stack frame
+    // which was filled above and executing EXC_RETURN. EXC_RETURN is explicitly set
+    // to standard stack frame type instead of possible extended stack frame in the original
+    // faulting point to guarantee the above stack fill is valid.
+    uint32_t new_exc_return = exc_return | 0x10;
+    uint32_t* new_sp = fault_stack + FAULT_STACK_WORDS - 8;
+
+    JumpToDump(new_exc_return, new_sp);
 }
 
+FAULT_HANDLER_XO_MEMORY_LOCATION
 static void FaultDump(void)
 {
     printf("\n==== %s exception ====\n\n", FaultNames[fault_type]);
@@ -373,7 +456,7 @@ static void FaultDump(void)
     printf("SP  = %08" PRIX32 " LR  = %08" PRIX32 " PC  = %08" PRIX32 "\n", regs[13], regs[14], regs[15]);
     printf("Mode %-8sflags set: ", exc_return & 8 ? "Thread" : "Handler");
     for (size_t i = 0, bit = 1u<<31; i < 24; i++) {
-        if (i < sizeof flag_names) {
+        if (i < sizeof flag_names - 1) {
             if (flag_names[i] != '0') {
                 putchar(regs[16] & bit ? flag_names[i] : flag_names[i] + 'a' - 'A');
             }
