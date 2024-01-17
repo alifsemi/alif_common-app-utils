@@ -15,6 +15,7 @@ extern "C" {
 #endif
 
 void fault_dump_enable(bool enable);
+bool in_fault_handler(void);
 
 #ifdef __cplusplus
 }

@@ -43,6 +43,13 @@ static void FaultDump(void);
 
 __attribute__((used))
 static bool fault_dump_enabled;
+__attribute__((used))
+static bool fault_handler_active;
+
+bool in_fault_handler(void)
+{
+    return fault_handler_active;
+}
 
 /* External activation function serves to ensure this file is pulled in, and the weak default handlers are overridden */
 void fault_dump_enable(bool enable)
@@ -100,10 +107,15 @@ static void CommonAsmFaultHandler(void /* int type */)
           "BEQ   stop\n\t"
           "MOV   R5, #0\n\t"                 // Disable fault dump, to prevent infinite loop
           "STRB  R5, [R7]\n\t"
+          "LDR   R7, =fault_handler_active\n\t"
+          "MOV   R5, #1\n\t"                 // Set fault handler active to allow possible ongoing prints to finish and our FaultDump to print
+          "STRB  R5, [R7]\n\t"
           "LDR   R7, =fault_type\n\t"        // Store fault type
           "STRB  R0, [R7]\n\t"
           "LDR   LR, =FaultDump\n\t"         // Prepare to "return" to FaultDump
           "BFI   R2, LR, #5, #1\n\t"         // transfer Thumb indicator into SPSR
+          "ORR   R2, R2, #0x17\n\t"          // Force Abort mode
+          "BIC   R2, R2, #0xC0\n\t"          // clear IRQ and FIQ masks
           "BIC   R2, R2, #3 << 25\n\t"       // clear IT bits
           "BIC   R2, R2, #0x3F << 10\n\t"
           "MSR   SPSR, R2\n\t"

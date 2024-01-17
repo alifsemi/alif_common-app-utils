@@ -37,6 +37,7 @@
 #include CMSIS_device_header
 
 #include "uart_tracelib.h"
+#include "fault_handler.h"
 
 #define UNUSED(x) (void)(x)
 
@@ -272,7 +273,7 @@ int RETARGET(_write)(FILEHANDLE fh, const unsigned char *buf, unsigned int len, 
     switch (fh) {
     case STDOUT:
     case STDERR: {
-        if(in_interrupt())
+        if(in_interrupt() && !in_fault_handler())
         {
            // this is ISR context so don't push to UART
            if(retarget_buf_len < RETARGET_BUF_MAX)
@@ -288,8 +289,17 @@ int RETARGET(_write)(FILEHANDLE fh, const unsigned char *buf, unsigned int len, 
         else
         {
             flush_uart();
-            send_str((const char *) buf, len);
+            int ret;
+            do
+            {
+                ret = send_str((const char *) buf, len);
+                // If fault handler is hit while printing was ongoing,
+                // we need to wait here until it's done before we
+                // go on printing fault handler stuff to not lose
+                // most of the fault handler prints.
+            } while (ret != ARM_DRIVER_OK && in_fault_handler());
         }
+
 #ifdef __ARMCC_VERSION
         // armcc expects to get the amount of characters that were not written
         return 0;
