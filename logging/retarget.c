@@ -78,6 +78,7 @@ typedef int FILEHANDLE;
 
 #include <sys/stat.h>
 
+
 /*
  * This type is used by the _ I/O functions to denote an open
  * file.
@@ -349,6 +350,9 @@ void _clock_init(void) {}
 
 // We don't want automatically init systick but call it manually if needed.
 #ifdef A32
+
+// CMSIS version 6.0.0 introduces these
+#if __CM_CMSIS_VERSION_MAIN < 6
 __STATIC_FORCEINLINE uint32_t __get_CNTFRQ(void)
 {
   uint32_t result;
@@ -362,6 +366,7 @@ __STATIC_FORCEINLINE uint64_t __get_CNTPCT(void)
   __get_CP64(15, 1, result, 14);
   return result;
 }
+#endif
 
 static uint64_t clock_epoch_start;
 
@@ -416,6 +421,23 @@ int rename(const char *oldn, const char *newn)
 
     return 0;
 }
+
+#if defined(__clang__) && !defined(__ARMCC_VERSION)
+
+// Picolibc retarget
+// https://github.com/picolibc/picolibc/blob/main/doc/os.md#system-interfaces-used-by-picolibc
+
+static int clang_putc(char c, FILE* file)
+{
+    (void)file;
+    _write(STDOUT, (const unsigned char*)&c, 1, 0);
+    return c;
+}
+
+static FILE __stdio = FDEV_SETUP_STREAM(clang_putc, 0, 0, _FDEV_SETUP_WRITE);
+FILE *const stdin = &__stdio; __strong_reference(stdin, stdout); __strong_reference(stdin, stderr);
+
+#endif
 
 #ifdef __ARMCC_VERSION
 /* ARMCC specific functions */
