@@ -152,21 +152,26 @@ int send_str(const char* str, uint32_t len)
     return ret;
 }
 
-void tracef(const char * format, ...)
+void vtracef(const char * format, va_list args)
 {
     if (initialized)
     {
         static char buffer[MAX_TRACE_LEN];
 
-        va_list args;
-        va_start(args, format);
         if (prefix_len) {
             memcpy(buffer, tr_prefix, prefix_len);
         }
         vsnprintf(buffer + prefix_len, sizeof(buffer) - prefix_len, format, args);
         send_str(buffer, strlen(buffer));
-        va_end(args);
     }
+}
+
+void tracef(const char * format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    vtracef(format, args);
+    va_end(args);
 }
 
 #else
@@ -190,6 +195,12 @@ int send_str(const char* str, uint32_t len)
     (void)str;
     (void)len;
     return 0;
+}
+
+void vtracef(const char * format, va_list args)
+{
+    (void)format;
+    (void)args;
 }
 
 void tracef(const char * format, ...)
