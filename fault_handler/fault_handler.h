@@ -10,6 +10,8 @@
 #ifndef FAULT_HANDLER_H
 #define FAULT_HANDLER_H
 
+#include <stdbool.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
