@@ -11,7 +11,9 @@
 #ifndef UART_TRACELIB_H_
 #define UART_TRACELIB_H_
 
+#include <stdarg.h>
 #include <stdint.h>
+#include "Driver_USART.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -24,12 +26,18 @@ extern "C" {
  *
  * @note Max length is currently 256 - length of the prefix
  */
-int tracelib_init(const char * prefix);
+int tracelib_init(const char * prefix, ARM_USART_SignalEvent_t cb_event);
+
+/**
+ * @brief Uninitializes the trace lib.
+ */
+int tracelib_uninit();
 
 /**
  * @brief write trace to UART
  */
 void tracef(const char * format, ...);
+void vtracef(const char * format, va_list args);
 
 /**
  * @brief Receive string from UART.

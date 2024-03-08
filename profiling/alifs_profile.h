@@ -24,6 +24,42 @@
 #include "RTE_Components.h"
 #include CMSIS_device_header
 
+#ifdef A32
+
+#define PMCCNTR_BIT 31
+// enable bit
+#define PMCR_E_BIT 0
+#define PMCR_LC_BIT 6
+
+__STATIC_FORCEINLINE uint32_t alifs_profile_start()
+{
+    uint32_t value;
+
+    // Enable cycle counter register (PMCNTENSET)
+    value = (1UL << PMCCNTR_BIT);
+    __set_CP(15, 0, value, 9, 12, 1);
+
+    // Configure cycle counter register (PMCR)
+    __get_CP(15, 0, value, 9, 12, 0); // get current value
+
+    // Enable counter, configure long cycle counter to always count on every clock cycle
+    value |= ((1 << PMCR_LC_BIT) |
+              (1 << PMCR_E_BIT));
+    __set_CP(15, 0, value, 9, 12, 0);
+
+    //read current cyclecounter value
+    __get_CP(15, 0, value, 9, 13, 0);
+    return value;
+}
+
+__STATIC_FORCEINLINE uint32_t alifs_profile_end(const uint32_t counter_start_value)
+{
+    uint32_t value;
+  __get_CP(15, 0, value, 9, 13, 0);
+  return (value - counter_start_value);
+}
+
+#else
 /*
  * Start Cycle counter (if it's not started yet) and return the initial cycle count.
  * @return the initial cycle count from tracing register.
@@ -45,6 +81,7 @@ __STATIC_FORCEINLINE uint32_t alifs_profile_end(const uint32_t counter_start_val
 {
     return (DWT->CYCCNT - counter_start_value);
 }
+#endif
 
 /*
  * Return the approximate number of nanoseconds the given cycle count corresponds to.
