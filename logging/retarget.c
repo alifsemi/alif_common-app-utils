@@ -402,7 +402,7 @@ clock_t clock(void)
     return clock_ticks;
 }
 
-void SysTick_Handler(void)
+void __attribute__((weak)) SysTick_Handler(void)
 {
     clock_ticks++;
 }
