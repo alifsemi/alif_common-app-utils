@@ -46,15 +46,9 @@ int tracelib_init(const char * prefix, ARM_USART_SignalEvent_t cb_event)
     extern ARM_DRIVER_USART ARM_Driver_USART_(BOARD_UARTA_UART_INSTANCE);
     USARTdrv = &ARM_Driver_USART_(BOARD_UARTA_UART_INSTANCE);
 #endif
-<<<<<<< Updated upstream
 #elif defined(M55_HP) || defined(RTSS_HP)
-    extern ARM_DRIVER_USART ARM_Driver_USART_(BOARD_UART2_INSTANCE);
-    USARTdrv = &ARM_Driver_USART_(BOARD_UART2_INSTANCE);
-=======
-#elif defined(RTSS_HP) || defined(RTSS_HP)
     extern ARM_DRIVER_USART ARM_Driver_USART_(BOARD_UARTB_UART_INSTANCE);
     USARTdrv = &ARM_Driver_USART_(BOARD_UARTB_UART_INSTANCE);
->>>>>>> Stashed changes
 #elif defined(A32)
     int cpuid = __get_MPIDR() & 0xFF;
     switch (cpuid) {
