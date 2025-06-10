@@ -43,12 +43,22 @@ int tracelib_init(const char * prefix, ARM_USART_SignalEvent_t cb_event)
     extern ARM_DRIVER_USART ARM_Driver_USART_(CUSTOM_HE_UART);
     USARTdrv = &ARM_Driver_USART_(CUSTOM_HE_UART);
 #else
+#ifdef USE_BOARDLIB
+    extern ARM_DRIVER_USART ARM_Driver_USART_(BOARD_UART1_INSTANCE);
+    USARTdrv = &ARM_Driver_USART_(BOARD_UART1_INSTANCE);
+#else
     extern ARM_DRIVER_USART ARM_Driver_USART_(BOARD_UARTA_UART_INSTANCE);
     USARTdrv = &ARM_Driver_USART_(BOARD_UARTA_UART_INSTANCE);
+#endif // USE_BOARDLIB
 #endif
 #elif defined(M55_HP) || defined(RTSS_HP)
+#ifdef USE_BOARDLIB
+    extern ARM_DRIVER_USART ARM_Driver_USART_(BOARD_UART2_INSTANCE);
+    USARTdrv = &ARM_Driver_USART_(BOARD_UART2_INSTANCE);
+#else
     extern ARM_DRIVER_USART ARM_Driver_USART_(BOARD_UARTB_UART_INSTANCE);
     USARTdrv = &ARM_Driver_USART_(BOARD_UARTB_UART_INSTANCE);
+#endif
 #elif defined(A32)
     int cpuid = __get_MPIDR() & 0xFF;
     switch (cpuid) {
