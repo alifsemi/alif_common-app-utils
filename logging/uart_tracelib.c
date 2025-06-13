@@ -31,6 +31,10 @@ static bool has_cb = false;
 uint16_t prefix_len;
 #define MAX_TRACE_LEN 256
 
+#ifndef TRACELIB_UART_BAUDRATE
+#define TRACELIB_UART_BAUDRATE 115200
+#endif
+
 int tracelib_init(const char * prefix, ARM_USART_SignalEvent_t cb_event)
 {
     if (initialized)
@@ -109,12 +113,11 @@ int tracelib_init(const char * prefix, ARM_USART_SignalEvent_t cb_event)
         return ret;
     }
 
-    /* Configure UART to 115200 Bits/sec */
     ret =  USARTdrv->Control(ARM_USART_MODE_ASYNCHRONOUS |
                              ARM_USART_DATA_BITS_8       |
                              ARM_USART_PARITY_NONE       |
                              ARM_USART_STOP_BITS_1       |
-                             ARM_USART_FLOW_CONTROL_NONE, 115200);
+                             ARM_USART_FLOW_CONTROL_NONE, TRACELIB_UART_BAUDRATE);
     if (ret != ARM_DRIVER_OK)
     {
         return ret;
