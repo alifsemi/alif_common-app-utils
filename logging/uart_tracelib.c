@@ -47,37 +47,48 @@ int tracelib_init(const char * prefix, ARM_USART_SignalEvent_t cb_event)
     extern ARM_DRIVER_USART ARM_Driver_USART_(CUSTOM_HE_UART);
     USARTdrv = &ARM_Driver_USART_(CUSTOM_HE_UART);
 #else
-#ifdef USE_BOARDLIB
+#ifdef BOARD_UART1_INSTANCE
     extern ARM_DRIVER_USART ARM_Driver_USART_(BOARD_UART1_INSTANCE);
     USARTdrv = &ARM_Driver_USART_(BOARD_UART1_INSTANCE);
-#else
+#elif defined(BOARD_UARTA_UART_INSTANCE)
     extern ARM_DRIVER_USART ARM_Driver_USART_(BOARD_UARTA_UART_INSTANCE);
     USARTdrv = &ARM_Driver_USART_(BOARD_UARTA_UART_INSTANCE);
-#endif // USE_BOARDLIB
-#endif
+#endif // BOARD_UART1_INSTANCE
+#endif // CUSTOM_HE_UART
 #elif defined(M55_HP) || defined(RTSS_HP)
-#ifdef USE_BOARDLIB
+#ifdef BOARD_UART2_INSTANCE
     extern ARM_DRIVER_USART ARM_Driver_USART_(BOARD_UART2_INSTANCE);
     USARTdrv = &ARM_Driver_USART_(BOARD_UART2_INSTANCE);
-#else
+#elif defined(BOARD_UARTB_UART_INSTANCE)
     extern ARM_DRIVER_USART ARM_Driver_USART_(BOARD_UARTB_UART_INSTANCE);
     USARTdrv = &ARM_Driver_USART_(BOARD_UARTB_UART_INSTANCE);
 #endif
 #elif defined(A32)
     int cpuid = __get_MPIDR() & 0xFF;
     switch (cpuid) {
+    case 0: {
 #ifdef BOARD_UART3_INSTANCE
-    extern ARM_DRIVER_USART ARM_Driver_USART_(BOARD_UART3_INSTANCE);
-    case 0:
+        extern ARM_DRIVER_USART ARM_Driver_USART_(BOARD_UART3_INSTANCE);
         USARTdrv = &ARM_Driver_USART_(BOARD_UART3_INSTANCE);
         break;
-#endif
-#ifdef BOARD_UART4_INSTANCE
-    extern ARM_DRIVER_USART ARM_Driver_USART_(BOARD_UART4_INSTANCE);
-    case 1:
-        USARTdrv = &ARM_Driver_USART_(BOARD_UART4_INSTANCE);
+#elif defined(BOARD_UARTC_UART_INSTANCE)
+        extern ARM_DRIVER_USART ARM_Driver_USART_(BOARD_UARTC_UART_INSTANCE);
+        USARTdrv = &ARM_Driver_USART_(BOARD_UARTC_UART_INSTANCE);
         break;
 #endif
+    }
+
+    case 1: {
+#ifdef BOARD_UART4_INSTANCE
+        extern ARM_DRIVER_USART ARM_Driver_USART_(BOARD_UART4_INSTANCE);
+        USARTdrv = &ARM_Driver_USART_(BOARD_UART4_INSTANCE);
+        break;
+#elif defined(BOARD_UARTD_UART_INSTANCE)
+        extern ARM_DRIVER_USART ARM_Driver_USART_(BOARD_UARTD_UART_INSTANCE);
+        USARTdrv = &ARM_Driver_USART_(BOARD_UARTD_UART_INSTANCE);
+        break;
+#endif
+    }
     default:
         return ARM_DRIVER_ERROR_UNSUPPORTED;
     }
