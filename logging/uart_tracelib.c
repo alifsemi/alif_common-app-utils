@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
+#include <stdatomic.h>
 #include <RTE_Components.h>
 #include CMSIS_device_header
 
@@ -25,7 +26,7 @@
 static ARM_DRIVER_USART *USARTdrv;
 
 volatile uint32_t uart_event;
-static bool initialized = false;
+static atomic_bool initialized = false;
 const char * tr_prefix = NULL;
 static bool has_cb = false;
 uint16_t prefix_len;
@@ -157,6 +158,8 @@ int tracelib_uninit()
     int32_t ret = 0;
     if (initialized)
     {
+        initialized = false;
+
         /* Power down UART peripheral */
         ret = USARTdrv->PowerControl(ARM_POWER_OFF);
         if (ret != ARM_DRIVER_OK)
@@ -169,8 +172,6 @@ int tracelib_uninit()
         {
             return ret;
         }
-
-        initialized = false;
     }
     return ret;
 }
@@ -189,6 +190,8 @@ int receive_str(char* str, uint32_t len)
         {
             while (USARTdrv->GetRxCount() != len);
         }
+    } else {
+        ret = -1;
     }
     return ret;
 }
