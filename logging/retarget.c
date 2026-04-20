@@ -405,11 +405,14 @@ clock_t clock(void)
     return clock_ticks;
 }
 
+#if !defined(DISABLE_COMMON_APP_SYSTICK)
 void SysTick_Handler(void)
 {
     clock_ticks++;
 }
-#endif
+#endif // !defined(DISABLE_COMMON_APP_SYSTICK)
+#endif // A32
+
 
 int remove(const char *arg) {
     UNUSED(arg);
