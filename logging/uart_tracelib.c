@@ -209,7 +209,7 @@ int send_str(const char* str, uint32_t len)
             return ret;
         }
 
-        while (USARTdrv->GetTxCount() != len) __WFE();
+        while (USARTdrv->GetTxCount() < len || USARTdrv->GetStatus().tx_busy) __WFE();
     }
     return ret;
 }
